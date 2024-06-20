@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.0
+// @version     1.1
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -18,10 +18,46 @@ const isEd = edCheck.test(url);
 const copyToDelIns = () => {
   const cstComments = document.querySelector("#custbody_customer_order_comments").value;
   const delIns = document.querySelector("#custbody_pacejet_delivery_instructions");
-  if (delIns.value !== '') {
-    delIns.value += '\n\n';
-  }
+  if (delIns.value !== '') delIns.value += '\n\n';
   delIns.value += cstComments;
+};
+
+// Fade a target over 2 seconds
+function fadeOutEffect(target) {
+  const fadeTarget = target;
+  const fadeEffect = setInterval(() => {
+    if (fadeTarget.style.opacity < 0.1) {
+      clearInterval(fadeEffect);
+    } else {
+      fadeTarget.style.opacity -= 0.1;
+    }
+  }, 150);
+};
+
+// Create popup to confirm copy
+const popupConfirm = (x, y) => {
+  const confPop = document.createElement("div");
+  confPop.innerHTML = "Copied!";
+  confPop.style.position = "absolute";
+  confPop.style.top = `${y-36}px`;
+  confPop.style.left = `${x-31}px`;
+  confPop.style.backgroundColor = '#fff';
+  confPop.style.border = '1px solid #000';
+  confPop.style.padding = '10px';
+  confPop.style.zIndex = 1000;
+  confPop.style.opacity = 1;
+  document.body.appendChild(confPop);
+  // console.log(confPop.offsetWidth);
+  // console.log(confPop.offsetHeight);
+
+  // Fade the popup out
+  fadeOutEffect(confPop);
+
+  // And remove it
+  setTimeout(() => {
+    confPop.remove();
+
+  }, 1500);
 };
 
 // Create 'add to delivery instructions' button element
@@ -50,6 +86,9 @@ const createDelInsBtn = () => {
     copyToDelIns();
     return false;
   };
+  btn.addEventListener("click", (event) => {
+    popupConfirm(event.clientX, event.clientY);
+  });
   document.querySelector("#custbody_customer_order_comments").after(btn);
 };
 
