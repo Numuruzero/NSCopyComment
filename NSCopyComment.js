@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     0.7
+// @version     1.0
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -33,8 +33,18 @@ const createDelInsBtn = () => {
   btn.style.left = "4px";
   btn.style.bottom = "44px";
   btn.style.backgroundColor = "#e4eaf5";
+  btn.style.border = "1px solid #508595";
   btn.addEventListener("mouseenter", (event) => {
-    btn.style.backgroundColor = "blue";
+    btn.style.backgroundColor = "#cddeff";
+  });
+  btn.addEventListener("mouseleave", (event) => {
+    btn.style.backgroundColor = "#e4eaf5";
+  });
+  btn.addEventListener("mousedown", (event) => {
+    btn.style.backgroundColor = "#4b88ff";
+  });
+  btn.addEventListener("mouseup", (event) => {
+    btn.style.backgroundColor = "#cddeff";
   });
   btn.onclick = () => {
     copyToDelIns();
