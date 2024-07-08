@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.1
+// @version     1.2
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -63,6 +63,7 @@ const popupConfirm = (x, y) => {
 // Create 'add to delivery instructions' button element
 const createDelInsBtn = () => {
   const btn = document.createElement("button");
+  let copied = false;
   btn.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
   btn.style.padding = "3em 2px";
   btn.style.position = "relative";
@@ -84,6 +85,12 @@ const createDelInsBtn = () => {
   });
   btn.onclick = () => {
     copyToDelIns();
+    if (copied == false) {
+      btn.innerHTML += "<br>(Done!)";
+      btn.style.padding = "30px 2px";
+      btn.style.top = "-35px";
+    };
+    copied = true;
     return false;
   };
   btn.addEventListener("click", (event) => {
