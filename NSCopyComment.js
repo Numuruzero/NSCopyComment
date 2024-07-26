@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.2
+// @version     1.21
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -64,11 +64,17 @@ const popupConfirm = (x, y) => {
 const createDelInsBtn = () => {
   const btn = document.createElement("button");
   let copied = false;
-  btn.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
+  const btnText = document.createElement("p");
+  btnText.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
+  btn.appendChild(btnText);
   btn.style.padding = "3em 2px";
+  btn.style.height = "134px";
   btn.style.position = "relative";
+  btn.style.display = "inline-flex";
+  btn.style.flexWrap = "wrap";
+  btn.style.alignContent = "center";
   btn.style.left = "4px";
-  btn.style.bottom = "44px";
+  btn.style.bottom = "80px";
   btn.style.backgroundColor = "#e4eaf5";
   btn.style.border = "1px solid #508595";
   btn.addEventListener("mouseenter", (event) => {
@@ -86,9 +92,9 @@ const createDelInsBtn = () => {
   btn.onclick = () => {
     copyToDelIns();
     if (copied == false) {
-      btn.innerHTML += "<br>(Done!)";
-      btn.style.padding = "30px 2px";
-      btn.style.top = "-35px";
+      btnText.innerHTML += "<br>(Done!)";
+      // btn.style.padding = "30px 2px";
+      btn.style.bottom = "89px";
     };
     copied = true;
     return false;
@@ -99,6 +105,18 @@ const createDelInsBtn = () => {
   document.querySelector("#custbody_customer_order_comments").after(btn);
 };
 
+const checkIP = () => {
+    const findIP = new RegExp(/(?:\d+\.){3}\d+/);
+    const ipATag = isEd ? document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.firstElementChild.href : document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.href;
+    const ip = findIP.exec(ipATag)[0];
+    console.log(ipATag);
+    console.log(ip);
+    const url = `https://ipapi.co/${ip}/json/`;
+    // w = window.open("",'_blank', 'toolbar=no,titlebar=no,status=no,menubar=no,scrollbars=no,resizable=no,left=12000, top=12000,width=10,height=10,visible=none', ''); w.location.href = url; setTimeout(function() { w.close(); }, 6000)
+    fetch(url)
+    .then((response) => response.json())
+    .then((data) => console.log(data));
+};
 
 //Wait until document is sufficiently loaded, then inject button
 if (isEd) {
@@ -107,7 +125,8 @@ if (isEd) {
     const node = document.querySelector("#custbody_customer_order_comments");
 
     if (node) {
-      createDelInsBtn();
+        createDelInsBtn();
+        checkIP();
 
       // disconnect observer
       return true;
