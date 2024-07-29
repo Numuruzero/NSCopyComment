@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.21
+// @version     1.22
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -106,16 +106,23 @@ const createDelInsBtn = () => {
 };
 
 const checkIP = () => {
-    const findIP = new RegExp(/(?:\d+\.){3}\d+/);
-    const ipATag = isEd ? document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.firstElementChild.href : document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.href;
-    const ip = findIP.exec(ipATag)[0];
-    console.log(ipATag);
-    console.log(ip);
-    const url = `https://ipapi.co/${ip}/json/`;
-    // w = window.open("",'_blank', 'toolbar=no,titlebar=no,status=no,menubar=no,scrollbars=no,resizable=no,left=12000, top=12000,width=10,height=10,visible=none', ''); w.location.href = url; setTimeout(function() { w.close(); }, 6000)
-    fetch(url)
-    .then((response) => response.json())
-    .then((data) => console.log(data));
+    if (document.querySelector("#custbody78_fs_lbl_uir_label")) {
+        const findIP = new RegExp(/(?:\d+\.){3}\d+/);
+        try {
+            const ipATag = isEd ? document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.firstElementChild.href : document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.href;
+        } catch (error) {
+            console.log(error);
+            return;
+        }
+        const ip = findIP.exec(ipATag)[0];
+        console.log(ipATag);
+        console.log(ip);
+        const url = `https://ipapi.co/${ip}/json/`;
+        // w = window.open("",'_blank', 'toolbar=no,titlebar=no,status=no,menubar=no,scrollbars=no,resizable=no,left=12000, top=12000,width=10,height=10,visible=none', ''); w.location.href = url; setTimeout(function() { w.close(); }, 6000)
+        fetch(url)
+            .then((response) => response.json())
+            .then((data) => console.log(data));
+    }
 };
 
 //Wait until document is sufficiently loaded, then inject button
