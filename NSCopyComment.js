@@ -6,7 +6,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.42
+// @version     1.43
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -32,6 +32,7 @@ if (url.includes("transactionlist")) {
 
 function open_tabs(urls) {
     urls.forEach((url) => {
+        console.log(`Opening ${url}`);
         window.open(url);
     });
 }
@@ -56,7 +57,9 @@ const getRowCount = () => {
         testRows = document.querySelector(`#row${y} > td:nth-child(6)`);
         y++;
     }
-    return lastRow;
+    console.log(`There are ${lastRow} rows`);
+    // Rows are 0-indexed so subtract one
+    return lastRow - 1;
   }
   
   const getColumnCount = () => {
@@ -68,7 +71,8 @@ const getRowCount = () => {
         lastColumn = x - 1;
         testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);
         x++;
-        }
+      }
+    console.log(`There are ${lastColumn} columns`);
     return lastColumn;
 }
   
