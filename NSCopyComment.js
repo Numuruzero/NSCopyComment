@@ -6,8 +6,10 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.4
+// @version     1.41
 // ==/UserScript==
+
+/*jshint esversion: 6 */
 
 // Declare const to determine if document is in edit mode
 const edCheck = new RegExp('e=T');
@@ -19,13 +21,13 @@ const isEd = edCheck.test(url);
 // Test if the URL is a transaction search and proceed with relevant scripts
 if (url.includes("transactionlist")) {
 
-colIndex = {
-    doc: 4,
-    op: 5,
-    status: 6,
-    memo: 7,
-    flags: 12
-}
+    colIndex = {
+        doc: 4,
+        op: 5,
+        status: 6,
+        memo: 7,
+        flags: 12
+    };
 
 function open_tabs(urls) {
     urls.forEach((url) => {
@@ -61,7 +63,7 @@ const getRowCount = () => {
     testColumns = document.querySelector("#row0 > td:nth-child(1)");
     while (testColumns) {
         lastColumn = x - 1;
-        testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);;
+        testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);
         x++;
         }
     return lastColumn;
@@ -84,26 +86,29 @@ const buildOrdersTable = () => {
           };
         column = 1;
         ordersTable.push(currentRow);
-        row++
+        row++;
     };
     return ordersTable;
 }
 
-const openOrders = () => {
-    const userName = document.querySelector("#uif374").innerHTML;
-    const tableState = buildOrdersTable();
-    console.log(tableState);
-    const orderURLs = [];
-    for (let i = 0; i <= tableState.length - 1; i++) {
-        if (tableState[i][colIndex.op]) {
-            if (tableState[i][colIndex.op].innerText == userName) {
-                orderURLs.push(tableState[i][colIndex.doc].lastElementChild.href);
+    const openOrders = () => {
+        // const userName = document.querySelector("#uif374").innerHTML;
+        // Experimental selector to find user's name
+        const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
+        const tableState = buildOrdersTable();
+        console.log(tableState);
+        const orderURLs = [];
+        for (let i = 0; i <= tableState.length - 1; i++) {
+            if (tableState[i][colIndex.op]) {
+                if (tableState[i][colIndex.op].innerText == userName) {
+                    orderURLs.push(tableState[i][colIndex.doc].lastElementChild.href);
+                }
             }
         }
-    }
-    console.log(orderURLs);
-    console.log(tableState[0][5].innerText);
-    open_tabs(orderURLs);
+        console.log(orderURLs);
+        console.log(tableState[0][5].innerText);
+        console.log(userName);
+        open_tabs(orderURLs);
 }
 
 const makeButton = () => {
@@ -296,7 +301,7 @@ const cst = {
         country: 'N/A',
         phone: 'N/A'
     }
-}
+};
 
 const ifNA = (arg) => {
     arg == 'N/A' ? true : false;
