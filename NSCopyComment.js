@@ -3,9 +3,10 @@
 // @namespace   jhutt.com
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
+// @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.31
+// @version     1.4
 // ==/UserScript==
 
 // Declare const to determine if document is in edit mode
@@ -13,6 +14,129 @@ const edCheck = new RegExp('e=T');
 const url = window.location.href;
 const isEd = edCheck.test(url);
 
+///////////////////////////////////BEGIN TRANSACTION/SEARCH SCRIPTS////////////////////////////////////
+
+// Test if the URL is a transaction search and proceed with relevant scripts
+if (url.includes("transactionlist")) {
+
+colIndex = {
+    doc: 4,
+    op: 5,
+    status: 6,
+    memo: 7,
+    flags: 12
+}
+
+function open_tabs(urls) {
+    urls.forEach((url) => {
+        window.open(url);
+    });
+}
+  
+// Query selector for "OP in Charge" (last-child span contains name)
+//   document.querySelector("#row0 > td:nth-child(6)")
+  
+// Query selector for "Document #" (child a tag contains link)
+// document.querySelector("#row0 > td:nth-child(5)")
+  
+// Re-using scripts for item table, need to tailor the below
+const getRowCount = () => {
+    let testRows;
+    let lastRow = 0;
+    let y = 0;
+    testRows = document.querySelector("#row0 > td:nth-child(6)");
+    // The lines are written differently in edit mode, so we'll need to account for this while counting rows
+    while (testRows) {
+        lastRow = y;
+        testRows = document.querySelector(`#row${y} > td:nth-child(6)`);
+        y++;
+    }
+    return lastRow;
+  }
+  
+  const getColumnCount = () => {
+    let testColumns;
+    let lastColumn = 0;
+    let x = 1;
+    testColumns = document.querySelector("#row0 > td:nth-child(1)");
+    while (testColumns) {
+        lastColumn = x - 1;
+        testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);;
+        x++;
+        }
+    return lastColumn;
+}
+  
+const buildOrdersTable = () => {
+    const ordersTable = [];
+    const totalRows = getRowCount();
+    const totalColumns = getColumnCount();
+    let currentRow = [];
+    let row = 0;
+    let column = 1;
+    let aRow;
+    while (row <= totalRows) {
+        currentRow = [];
+          while (column <= totalColumns) {
+            aRow = document.querySelector(`#row${row} > td:nth-child(${column})`);
+            currentRow.push(aRow);
+            column++;
+          };
+        column = 1;
+        ordersTable.push(currentRow);
+        row++
+    };
+    return ordersTable;
+}
+
+const openOrders = () => {
+    const userName = document.querySelector("#uif374").innerHTML;
+    const tableState = buildOrdersTable();
+    console.log(tableState);
+    const orderURLs = [];
+    for (let i = 0; i <= tableState.length - 1; i++) {
+        if (tableState[i][colIndex.op]) {
+            if (tableState[i][colIndex.op].innerText == userName) {
+                orderURLs.push(tableState[i][colIndex.doc].lastElementChild.href);
+            }
+        }
+    }
+    console.log(orderURLs);
+    console.log(tableState[0][5].innerText);
+    open_tabs(orderURLs);
+}
+
+const makeButton = () => {
+    opeb = document.createElement("button");
+    opeb.innerHTML = "Open Links";
+    opeb.style.marginLeft = "1rem";
+    opeb.style.position = "relative";
+    opeb.style.top = "5px";
+    opeb.onclick = () => {
+        openOrders();
+        return false;
+    }
+    // Stuff
+    document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(opeb);
+}
+
+const tableCheck = VM.observe(document.body, () => {
+    // Find the target node
+    const node = document.querySelector("#row0 > td:nth-child(1)");
+  
+    if (node) {
+      // console.log('Building item table')
+        makeButton();
+  
+      // disconnect observer
+      return true;
+    }
+});
+    // Return to stop script once we are done with transaction search scripts
+    return;
+}
+////////////////////////////////////END TRANSACTION/SEARCH SCRIPTS/////////////////////////////////////
+////////////////////////////////BEGIN SALES ORDER AND ESTIMATE SCRIPTS////////////////////////////////
 ///////////////////////////////BEGIN DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
 // Function for delivery instructions button to invoke
 // Copy text from cst comments to delivery instructions, and add space if text is already present
