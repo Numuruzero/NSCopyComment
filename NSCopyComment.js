@@ -6,7 +6,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.41
+// @version     1.42
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -26,7 +26,8 @@ if (url.includes("transactionlist")) {
         op: 5,
         status: 6,
         memo: 7,
-        flags: 12
+        flags: 12,
+        set: false
     };
 
 function open_tabs(urls) {
@@ -40,8 +41,10 @@ function open_tabs(urls) {
   
 // Query selector for "Document #" (child a tag contains link)
 // document.querySelector("#row0 > td:nth-child(5)")
-  
-// Re-using scripts for item table, need to tailor the below
+
+    // Query selector for headers
+    // document.querySelector("#div__lab1")
+
 const getRowCount = () => {
     let testRows;
     let lastRow = 0;
@@ -77,13 +80,35 @@ const buildOrdersTable = () => {
     let row = 0;
     let column = 1;
     let aRow;
+    let headerText;
     while (row <= totalRows) {
         currentRow = [];
-          while (column <= totalColumns) {
+        while (column <= totalColumns) {
             aRow = document.querySelector(`#row${row} > td:nth-child(${column})`);
             currentRow.push(aRow);
+            if (colIndex.set == false) {
+                headerText = document.querySelector(`#div__lab${column}`).innerText;
+                switch (true) {
+                    case headerText.includes("DOCUMENT"):
+                        colIndex.doc = column - 1;
+                        break;
+                    case headerText.includes("OP IN CHARGE"):
+                        colIndex.op = column - 1;
+                        break;
+                    case headerText.includes("STATUS"):
+                        colIndex.status = column - 1;
+                        break;
+                    case headerText.includes("MEMO"):
+                        colIndex.memo = column - 1;
+                        break;
+                    case headerText.includes("MAJOR FLAGS"):
+                        colIndex.flags = column - 1;
+                        break;
+                }
+            }
             column++;
-          };
+        };
+        colIndex.set = true;
         column = 1;
         ordersTable.push(currentRow);
         row++;
@@ -97,6 +122,7 @@ const buildOrdersTable = () => {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const tableState = buildOrdersTable();
         console.log(tableState);
+        console.log(colIndex);
         const orderURLs = [];
         for (let i = 0; i <= tableState.length - 1; i++) {
             if (tableState[i][colIndex.op]) {
