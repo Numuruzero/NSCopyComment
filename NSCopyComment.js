@@ -6,7 +6,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.44
+// @version     1.45
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -16,111 +16,121 @@ const edCheck = new RegExp('e=T');
 const url = window.location.href;
 const isEd = edCheck.test(url);
 
+const perfDebug = false;
+
+function debug(stuff) {
+    if (perfDebug) {
+        console.log(stuff);
+    }
+}
+
 ///////////////////////////////////BEGIN TRANSACTION/SEARCH SCRIPTS////////////////////////////////////
 
 // Test if the URL is a transaction search and proceed with relevant scripts
 if (url.includes("transactionlist")) {
 
     colIndex = {
-        doc: 4,
-        op: 5,
-        status: 6,
-        memo: 7,
-        flags: 12,
+        doc: 0,
+        op: 0,
+        status: 0,
+        memo: 0,
+        flags: 0,
         set: false
     };
 
     // Important note: the browser may block pop-ups if opening multiple tabs. The user can either click the "Pop Ups Blocked" notification in the URL bar and allow them, or on Chrome navigate to Settings > Privacy and security > Site settings > Pop-ups and redirects (chrome://settings/content/popups) and then add NetSuite
-function open_tabs(urls) {
-    urls.forEach((url) => {
-        console.log(`Opening ${url}`);
-        window.open(url);
-    });
-}
-  
-// Query selector for "OP in Charge" (last-child span contains name)
-//   document.querySelector("#row0 > td:nth-child(6)")
-  
-// Query selector for "Document #" (child a tag contains link)
-// document.querySelector("#row0 > td:nth-child(5)")
+    function open_tabs(urls) {
+        urls.forEach((url) => {
+            debug(`Opening ${url}`);
+            window.open(url);
+        });
+    }
+
+    // Query selector for "OP in Charge" (last-child span contains name)
+    //   document.querySelector("#row0 > td:nth-child(6)")
+
+    // Query selector for "Document #" (child a tag contains link)
+    // document.querySelector("#row0 > td:nth-child(5)")
 
     // Query selector for headers
     // document.querySelector("#div__lab1")
 
-const getRowCount = () => {
-    let testRows;
-    let lastRow = 0;
-    let y = 0;
-    testRows = document.querySelector("#row0 > td:nth-child(6)");
-    // The lines are written differently in edit mode, so we'll need to account for this while counting rows
-    while (testRows) {
-        lastRow = y;
-        testRows = document.querySelector(`#row${y} > td:nth-child(6)`);
-        y++;
+    const getRowCount = () => {
+        let testRows;
+        let lastRow = 0;
+        let y = 0;
+        testRows = document.querySelector("#row0 > td:nth-child(6)");
+        // The lines are written differently in edit mode, so we'll need to account for this while counting rows
+        while (testRows) {
+            lastRow = y;
+            testRows = document.querySelector(`#row${y} > td:nth-child(6)`);
+            y++;
+        }
+        debug(`There are ${lastRow} rows`);
+        // Rows are 0-indexed so subtract one
+        return lastRow - 1;
     }
-    console.log(`There are ${lastRow} rows`);
-    // Rows are 0-indexed so subtract one
-    return lastRow - 1;
-  }
-  
-  const getColumnCount = () => {
-    let testColumns;
-    let lastColumn = 0;
-    let x = 1;
-    testColumns = document.querySelector("#row0 > td:nth-child(1)");
-    while (testColumns) {
-        lastColumn = x - 1;
-        testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);
-        x++;
-      }
-    console.log(`There are ${lastColumn} columns`);
-    return lastColumn;
-}
-  
-const buildOrdersTable = () => {
-    const ordersTable = [];
-    const totalRows = getRowCount();
-    const totalColumns = getColumnCount();
-    let currentRow = [];
-    let row = 0;
-    let column = 1;
-    let aRow;
-    let headerText;
-    while (row <= totalRows) {
-        currentRow = [];
-        while (column <= totalColumns) {
-            aRow = document.querySelector(`#row${row} > td:nth-child(${column})`);
-            currentRow.push(aRow);
-            if (colIndex.set == false) {
-                headerText = document.querySelector(`#div__lab${column}`).innerText;
-                switch (true) {
-                    case headerText.includes("DOCUMENT"):
-                        colIndex.doc = column - 1;
-                        break;
-                    case headerText.includes("OP IN CHARGE"):
-                        colIndex.op = column - 1;
-                        break;
-                    case headerText.includes("STATUS"):
-                        colIndex.status = column - 1;
-                        break;
-                    case headerText.includes("MEMO"):
-                        colIndex.memo = column - 1;
-                        break;
-                    case headerText.includes("MAJOR FLAGS"):
-                        colIndex.flags = column - 1;
-                        break;
+
+    const getColumnCount = () => {
+        let testColumns;
+        let lastColumn = 0;
+        let x = 1;
+        testColumns = document.querySelector("#row0 > td:nth-child(1)");
+        while (testColumns) {
+            lastColumn = x - 1;
+            testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);
+            x++;
+        }
+        debug(`There are ${lastColumn} columns`);
+        return lastColumn;
+    }
+
+    const buildOrdersTable = () => {
+        const ordersTable = [];
+        const totalRows = getRowCount();
+        const totalColumns = getColumnCount();
+        let currentRow = [];
+        let row = 0;
+        let column = 1;
+        let aRow;
+        let headerText;
+        while (row <= totalRows) {
+            currentRow = [];
+            while (column <= totalColumns) {
+                aRow = document.querySelector(`#row${row} > td:nth-child(${column})`);
+                currentRow.push(aRow);
+                if (colIndex.set == false) {
+                    headerText = document.querySelector(`#div__lab${column}`).textContent.toUpperCase();
+                    debug(headerText);
+                    switch (true) {
+                        case headerText.includes("DOCUMENT"):
+                            colIndex.doc = column - 1;
+                            break;
+                        case headerText.includes("OP IN CHARGE"):
+                            colIndex.op = column - 1;
+                            break;
+                        case headerText.includes("STATUS"):
+                            colIndex.status = column - 1;
+                            break;
+                        case headerText.includes("MEMO"):
+                            colIndex.memo = column - 1;
+                            break;
+                        case headerText.includes("MAJOR FLAGS"):
+                            colIndex.flags = column - 1;
+                            break;
+                    }
                 }
-            }
-            column++;
+                column++;
+            };
+            colIndex.set = true;
+            column = 1;
+            ordersTable.push(currentRow);
+            row++;
         };
-        colIndex.set = true;
-        column = 1;
-        ordersTable.push(currentRow);
-        row++;
-    };
-    return ordersTable;
+        debug(colIndex);
+        return ordersTable;
     }
-    
+
     const readOrders = () => {
         function Order() {
             this.so = "";
@@ -130,7 +140,7 @@ const buildOrdersTable = () => {
             this.flags = {
                 text: "",
                 types: [],
-                setFlagTypes: function() {
+                setFlagTypes: function () {
                     if (this.text.includes("Fraud Review:")) { this.types.push("Fraud Review") };
                     if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
                     if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
@@ -140,21 +150,21 @@ const buildOrdersTable = () => {
                     if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
                     if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
                 },
-                getCommentType: function() {
+                getCommentType: function () {
                     let cmntType = "";
                     if (this.types.includes("Comment")) {
                         return cmntType;
-                    } else { console.log("Type is not comment or no comment found") }
+                    } else { debug("Type is not comment or no comment found") }
                 }
             }
         }
         const tableState = buildOrdersTable();
-        console.log(tableState);
+        debug(tableState);
         let orderInfo = [];
         let thisSO;
         for (let i = 0; i <= tableState.length - 1; i++) {
             try {
-                console.log(tableState[i][colIndex.doc]);
+                debug(tableState[i][colIndex.doc]);
                 thisSO = new Order();
                 thisSO.so = tableState[i][colIndex.doc].firstElementChild.innerHTML;
                 thisSO.url = tableState[i][colIndex.doc].firstElementChild.href;
@@ -164,7 +174,7 @@ const buildOrdersTable = () => {
                 thisSO.flags.setFlagTypes();
                 orderInfo.push(thisSO);
             } catch (error) {
-                console.log(error);
+                debug(error);
             }
         }
         return orderInfo;
@@ -176,8 +186,7 @@ const buildOrdersTable = () => {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const tableState = readOrders();
         // const tableState = readOrders();
-        console.log(tableState);
-        console.log(colIndex);
+        debug(tableState);
         const orderURLs = [];
         for (let i = 0; i <= tableState.length - 1; i++) {
             switch (scope) {
@@ -198,10 +207,10 @@ const buildOrdersTable = () => {
                     break;
             }
         }
-        console.log(orderURLs);
-        console.log(userName);
+        debug(orderURLs);
+        debug(userName);
         open_tabs(orderURLs);
-}
+    }
 
     const makeButtons = () => {
         btnContainer = document.createElement("div");
@@ -219,10 +228,10 @@ const buildOrdersTable = () => {
                     flagList.push(flag);
                 });
             } catch (error) {
-                console.log(error);
+                debug(error);
             }
         }
-        console.log(flagList);
+        debug(flagList);
         // Function to create buttons below and keep style standard
         function createButton(text, scope) {
             btn = document.createElement("button");
@@ -287,19 +296,19 @@ const buildOrdersTable = () => {
         btnContainer.appendChild(btnUS48);
         addListeners(btnUS48);
         document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(btnContainer);
-}
-
-const tableCheck = VM.observe(document.body, () => {
-    // Find the target node
-    const node = document.querySelector("#row0 > td:nth-child(1)");
-  
-    if (node) {
-        makeButtons();
-  
-      // disconnect observer
-      return true;
     }
-});
+
+    const tableCheck = VM.observe(document.body, () => {
+        // Find the target node
+        const node = document.querySelector("#row0 > td:nth-child(1)");
+
+        if (node) {
+            makeButtons();
+
+            // disconnect observer
+            return true;
+        }
+    });
     // Return to stop script once we are done with transaction search scripts
     return;
 }
@@ -309,93 +318,93 @@ const tableCheck = VM.observe(document.body, () => {
 // Function for delivery instructions button to invoke
 // Copy text from cst comments to delivery instructions, and add space if text is already present
 const copyToDelIns = () => {
-  const cstComments = document.querySelector("#custbody_customer_order_comments").value;
-  const delIns = document.querySelector("#custbody_pacejet_delivery_instructions");
-  if (delIns.value !== '') delIns.value += '\n\n';
-  delIns.value += cstComments;
+    const cstComments = document.querySelector("#custbody_customer_order_comments").value;
+    const delIns = document.querySelector("#custbody_pacejet_delivery_instructions");
+    if (delIns.value !== '') delIns.value += '\n\n';
+    delIns.value += cstComments;
 };
 
 // Fade a target over 2 seconds
 function fadeOutEffect(target) {
-  const fadeTarget = target;
-  const fadeEffect = setInterval(() => {
-    if (fadeTarget.style.opacity < 0.1) {
-      clearInterval(fadeEffect);
-    } else {
-      fadeTarget.style.opacity -= 0.1;
-    }
-  }, 150);
+    const fadeTarget = target;
+    const fadeEffect = setInterval(() => {
+        if (fadeTarget.style.opacity < 0.1) {
+            clearInterval(fadeEffect);
+        } else {
+            fadeTarget.style.opacity -= 0.1;
+        }
+    }, 150);
 };
 
 // Create popup to confirm copy
 const popupConfirm = (x, y) => {
-  const confPop = document.createElement("div");
-  confPop.innerHTML = "Copied!";
-  confPop.style.position = "absolute";
-  confPop.style.top = `${y-36}px`;
-  confPop.style.left = `${x-31}px`;
-  confPop.style.backgroundColor = '#fff';
-  confPop.style.border = '1px solid #000';
-  confPop.style.padding = '10px';
-  confPop.style.zIndex = 1000;
-  confPop.style.opacity = 1;
-  document.body.appendChild(confPop);
-  // console.log(confPop.offsetWidth);
-  // console.log(confPop.offsetHeight);
+    const confPop = document.createElement("div");
+    confPop.innerHTML = "Copied!";
+    confPop.style.position = "absolute";
+    confPop.style.top = `${y - 36}px`;
+    confPop.style.left = `${x - 31}px`;
+    confPop.style.backgroundColor = '#fff';
+    confPop.style.border = '1px solid #000';
+    confPop.style.padding = '10px';
+    confPop.style.zIndex = 1000;
+    confPop.style.opacity = 1;
+    document.body.appendChild(confPop);
+    // debug(confPop.offsetWidth);
+    // debug(confPop.offsetHeight);
 
-  // Fade the popup out
-  fadeOutEffect(confPop);
+    // Fade the popup out
+    fadeOutEffect(confPop);
 
-  // And remove it
-  setTimeout(() => {
-    confPop.remove();
+    // And remove it
+    setTimeout(() => {
+        confPop.remove();
 
-  }, 1500);
+    }, 1500);
 };
 
 // Create 'add to delivery instructions' button element
 const createDelInsBtn = () => {
-  const btn = document.createElement("button");
-  let copied = false;
-  const btnText = document.createElement("p");
-  btnText.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
-  btn.appendChild(btnText);
-  btn.style.padding = "3em 2px";
-  btn.style.height = "134px";
-  btn.style.position = "relative";
-  btn.style.display = "inline-flex";
-  btn.style.flexWrap = "wrap";
-  btn.style.alignContent = "center";
-  btn.style.left = "4px";
-  btn.style.bottom = "80px";
-  btn.style.backgroundColor = "#e4eaf5";
-  btn.style.border = "1px solid #508595";
-  btn.addEventListener("mouseenter", (event) => {
-    btn.style.backgroundColor = "#cddeff";
-  });
-  btn.addEventListener("mouseleave", (event) => {
+    const btn = document.createElement("button");
+    let copied = false;
+    const btnText = document.createElement("p");
+    btnText.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
+    btn.appendChild(btnText);
+    btn.style.padding = "3em 2px";
+    btn.style.height = "134px";
+    btn.style.position = "relative";
+    btn.style.display = "inline-flex";
+    btn.style.flexWrap = "wrap";
+    btn.style.alignContent = "center";
+    btn.style.left = "4px";
+    btn.style.bottom = "80px";
     btn.style.backgroundColor = "#e4eaf5";
-  });
-  btn.addEventListener("mousedown", (event) => {
-    btn.style.backgroundColor = "#4b88ff";
-  });
-  btn.addEventListener("mouseup", (event) => {
-    btn.style.backgroundColor = "#cddeff";
-  });
-  btn.onclick = () => {
-    copyToDelIns();
-    if (copied == false) {
-      btnText.innerHTML += "<br>(Done!)";
-      // btn.style.padding = "30px 2px";
-      btn.style.bottom = "89px";
+    btn.style.border = "1px solid #508595";
+    btn.addEventListener("mouseenter", (event) => {
+        btn.style.backgroundColor = "#cddeff";
+    });
+    btn.addEventListener("mouseleave", (event) => {
+        btn.style.backgroundColor = "#e4eaf5";
+    });
+    btn.addEventListener("mousedown", (event) => {
+        btn.style.backgroundColor = "#4b88ff";
+    });
+    btn.addEventListener("mouseup", (event) => {
+        btn.style.backgroundColor = "#cddeff";
+    });
+    btn.onclick = () => {
+        copyToDelIns();
+        if (copied == false) {
+            btnText.innerHTML += "<br>(Done!)";
+            // btn.style.padding = "30px 2px";
+            btn.style.bottom = "89px";
+        };
+        copied = true;
+        return false;
     };
-    copied = true;
-    return false;
-  };
-  btn.addEventListener("click", (event) => {
-    popupConfirm(event.clientX, event.clientY);
-  });
-  document.querySelector("#custbody_customer_order_comments").after(btn);
+    btn.addEventListener("click", (event) => {
+        popupConfirm(event.clientX, event.clientY);
+    });
+    document.querySelector("#custbody_customer_order_comments").after(btn);
 };
 
 const checkIP = () => {
@@ -404,15 +413,15 @@ const checkIP = () => {
         try {
             const ipATag = isEd ? document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.firstElementChild.href : document.querySelector("#custbody78_fs_lbl_uir_label").nextElementSibling.firstElementChild.href;
             const ip = findIP.exec(ipATag)[0];
-            console.log(ipATag);
-            console.log(ip);
+            debug(ipATag);
+            debug(ip);
             const url = `https://ipapi.co/${ip}/json/`;
             // w = window.open("",'_blank', 'toolbar=no,titlebar=no,status=no,menubar=no,scrollbars=no,resizable=no,left=12000, top=12000,width=10,height=10,visible=none', ''); w.location.href = url; setTimeout(function() { w.close(); }, 6000)
             fetch(url)
                 .then((response) => response.json())
-                .then((data) => console.log(data));
+                .then((data) => debug(data));
         } catch (error) {
-            console.log(error);
+            debug(error);
             return;
         }
     }
@@ -420,18 +429,18 @@ const checkIP = () => {
 
 //Wait until document is sufficiently loaded, then inject button
 if (isEd) {
-  const disconnect = VM.observe(document.body, () => {
-    // Find the target node
-    const node = document.querySelector("#custbody_customer_order_comments");
+    const disconnect = VM.observe(document.body, () => {
+        // Find the target node
+        const node = document.querySelector("#custbody_customer_order_comments");
 
-    if (node) {
-        createDelInsBtn();
-        // checkIP();
+        if (node) {
+            createDelInsBtn();
+            // checkIP();
 
-      // disconnect observer
-      return true;
-    }
-  });
+            // disconnect observer
+            return true;
+        }
+    });
 };
 
 ///////////////////////////////END DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
@@ -477,7 +486,7 @@ const parseAddress = () => {
         cst.bill.phone = billphone;
         cst.ship.phone = shipphone;
     } catch (error) {
-        console.log(error);
+        debug(error);
     }
     const shipAddress = isEd ? document.querySelector("#shipaddress").innerHTML : document.querySelector("#shipaddress_fs_lbl_uir_label").nextElementSibling.innerText;
     const billAddress = isEd ? document.querySelector("#billaddress").innerHTML : document.querySelector("#billaddress_fs_lbl_uir_label").nextElementSibling.innerText;
@@ -492,33 +501,33 @@ const parseAddress = () => {
     shipArray.forEach((element, index) => {
         switch (true) {
             case streetReg.test(element):
-                console.log(`Street address (${currentSearch}) found on line ${index + 1}`);
+                debug(`Street address (${currentSearch}) found on line ${index + 1}`);
                 cst.ship.street = element;
                 break;
             case suiteReg.test(element):
-                console.log(`Suite number (${currentSearch}) found on line ${index + 1}`);
+                debug(`Suite number (${currentSearch}) found on line ${index + 1}`);
                 cst.ship.suite = element;
                 break;
             case cszReg.test(element):
-                console.log(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
+                debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
                 cst.ship.city = csz.groups.city;
                 cst.ship.state = csz.groups.state;
                 cst.ship.zip = csz.groups.zip;
                 break;
             case countryReg.test(element):
-                console.log(`Country (${currentSearch}) found on line ${index + 1}`);
-                cst.ship.country = element.replace("Map","").trim();
+                debug(`Country (${currentSearch}) found on line ${index + 1}`);
+                cst.ship.country = element.replace("Map", "").trim();
                 break;
             default:
                 if (index == 1) {
-                    console.log(`Company (${currentSearch}) found on line ${index + 1}`);
+                    debug(`Company (${currentSearch}) found on line ${index + 1}`);
                     cst.ship.company = element;
                 } else if (index == 0) {
-                    console.log(`Customer (${currentSearch}) found on line ${index + 1}`);
+                    debug(`Customer (${currentSearch}) found on line ${index + 1}`);
                     cst.ship.name = element;
                 } else {
-                    console.log(`No matches found for ${element}`);
+                    debug(`No matches found for ${element}`);
                 }
                 break;
         }
@@ -527,33 +536,33 @@ const parseAddress = () => {
     billArray.forEach((element, index) => {
         switch (true) {
             case streetReg.test(element):
-                console.log(`Street address (${currentSearch}) found on line ${index + 1}`);
+                debug(`Street address (${currentSearch}) found on line ${index + 1}`);
                 cst.bill.street = element;
                 break;
             case suiteReg.test(element):
-                console.log(`Suite number (${currentSearch}) found on line ${index + 1}`);
+                debug(`Suite number (${currentSearch}) found on line ${index + 1}`);
                 cst.bill.suite = element;
                 break;
             case cszReg.test(element):
-                console.log(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
+                debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
                 cst.bill.city = csz.groups.city;
                 cst.bill.state = csz.groups.state;
                 cst.bill.zip = csz.groups.zip;
                 break;
             case countryReg.test(element):
-                console.log(`Country (${currentSearch}) found on line ${index + 1}`);
-                cst.bill.country = element.replace("Map","").trim();
+                debug(`Country (${currentSearch}) found on line ${index + 1}`);
+                cst.bill.country = element.replace("Map", "").trim();
                 break;
             default:
                 if (index == 1) {
-                    console.log(`Company (${currentSearch}) found on line ${index + 1}`);
+                    debug(`Company (${currentSearch}) found on line ${index + 1}`);
                     cst.bill.company = element;
                 } else if (index == 0) {
-                    console.log(`Customer (${currentSearch}) found on line ${index + 1}`);
+                    debug(`Customer (${currentSearch}) found on line ${index + 1}`);
                     cst.bill.name = element;
                 } else {
-                    console.log(`No matches found for ${element}`);
+                    debug(`No matches found for ${element}`);
                 }
                 break;
         }
@@ -674,7 +683,7 @@ const createSearchLinks = () => {
                 links[type].html += `<div class="search"> <div class="term inline"> <p class="bold">${links[type].titles[i]}:</p> <p> ${links[type].results[i]} </p> </div> <div class="links"> ${ahtml} </div> </div>`
             }
         }
-        
+
     }
     return links;
 }
@@ -682,7 +691,7 @@ const createSearchLinks = () => {
 const loadCheck = VM.observe(document.body, () => {
     // Find the target node
     const node = document.querySelector("#custom189_div");
-  
+
     if (node) {
         parseAddress();
         const links = createSearchLinks();
@@ -693,8 +702,8 @@ const loadCheck = VM.observe(document.body, () => {
         fraudFrame.contentWindow.document.open();
         fraudFrame.contentWindow.document.write(html);
         fraudFrame.contentWindow.document.close();
-  
-      // disconnect observer
-      return true;
+
+        // disconnect observer
+        return true;
     }
 });
