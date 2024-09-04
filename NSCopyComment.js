@@ -6,7 +6,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.43
+// @version     1.44
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -30,6 +30,7 @@ if (url.includes("transactionlist")) {
         set: false
     };
 
+    // Important note: the browser may block pop-ups if opening multiple tabs. The user can either click the "Pop Ups Blocked" notification in the URL bar and allow them, or on Chrome navigate to Settings > Privacy and security > Site settings > Pop-ups and redirects (chrome://settings/content/popups) and then add NetSuite
 function open_tabs(urls) {
     urls.forEach((url) => {
         console.log(`Opening ${url}`);
@@ -118,41 +119,174 @@ const buildOrdersTable = () => {
         row++;
     };
     return ordersTable;
-}
+    }
+    
+    const readOrders = () => {
+        function Order() {
+            this.so = "";
+            this.url = "";
+            this.op = "";
+            this.memo = "";
+            this.flags = {
+                text: "",
+                types: [],
+                setFlagTypes: function() {
+                    if (this.text.includes("Fraud Review:")) { this.types.push("Fraud Review") };
+                    if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
+                    if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
+                    if (this.text.includes("Address Validation")) { this.types.push("Address Validation") };
+                    if (this.text.includes("Sales Rep:")) { this.types.push("Sales Rep") };
+                    if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
+                    if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
+                    if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
+                },
+                getCommentType: function() {
+                    let cmntType = "";
+                    if (this.types.includes("Comment")) {
+                        return cmntType;
+                    } else { console.log("Type is not comment or no comment found") }
+                }
+            }
+        }
+        const tableState = buildOrdersTable();
+        console.log(tableState);
+        let orderInfo = [];
+        let thisSO;
+        for (let i = 0; i <= tableState.length - 1; i++) {
+            try {
+                console.log(tableState[i][colIndex.doc]);
+                thisSO = new Order();
+                thisSO.so = tableState[i][colIndex.doc].firstElementChild.innerHTML;
+                thisSO.url = tableState[i][colIndex.doc].firstElementChild.href;
+                thisSO.op = tableState[i][colIndex.op].textContent;
+                thisSO.memo = tableState[i][colIndex.memo].textContent;
+                thisSO.flags.text = tableState[i][colIndex.flags].textContent;
+                thisSO.flags.setFlagTypes();
+                orderInfo.push(thisSO);
+            } catch (error) {
+                console.log(error);
+            }
+        }
+        return orderInfo;
+    }
 
-    const openOrders = () => {
+    const openOrders = (scope) => {
         // const userName = document.querySelector("#uif374").innerHTML;
         // Experimental selector to find user's name
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
-        const tableState = buildOrdersTable();
+        const tableState = readOrders();
+        // const tableState = readOrders();
         console.log(tableState);
         console.log(colIndex);
         const orderURLs = [];
         for (let i = 0; i <= tableState.length - 1; i++) {
-            if (tableState[i][colIndex.op]) {
-                if (tableState[i][colIndex.op].innerText == userName) {
-                    orderURLs.push(tableState[i][colIndex.doc].lastElementChild.href);
-                }
+            switch (scope) {
+                case "All":
+                    if (tableState[i].op == userName) {
+                        orderURLs.push(tableState[i].url);
+                    }
+                    break;
+                case "None":
+                    if (tableState[i].op == userName && tableState[i].flags.types.length == 0) {
+                        orderURLs.push(tableState[i].url);
+                    }
+                    break;
+                default:
+                    if (tableState[i].op == userName && tableState[i].flags.types.includes(scope)) {
+                        orderURLs.push(tableState[i].url);
+                    }
+                    break;
             }
         }
         console.log(orderURLs);
-        console.log(tableState[0][5].innerText);
         console.log(userName);
         open_tabs(orderURLs);
 }
 
-const makeButton = () => {
-    opeb = document.createElement("button");
-    opeb.innerHTML = "Open Links";
-    opeb.style.marginLeft = "1rem";
-    opeb.style.position = "relative";
-    opeb.style.top = "5px";
-    opeb.onclick = () => {
-        openOrders();
-        return false;
-    }
-    // Stuff
-    document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(opeb);
+    const makeButtons = () => {
+        btnContainer = document.createElement("div");
+        btnContainer.style.backgroundColor = "#f0f8ff";
+        btnContainer.style.display = "inline-flex";
+        btnContainer.style.padding = "10px";
+        btnContainer.style.border = "2px solid #7595cc";
+        // Finish container
+        // Make table to check flags for
+        const flagTable = readOrders();
+        const flagList = [];
+        for (let i = 0; i <= flagTable.length - 1; i++) {
+            try {
+                flagTable[i].flags.types.forEach((flag) => {
+                    flagList.push(flag);
+                });
+            } catch (error) {
+                console.log(error);
+            }
+        }
+        console.log(flagList);
+        // Function to create buttons below and keep style standard
+        function createButton(text, scope) {
+            btn = document.createElement("button");
+            btn.innerHTML = text;
+            btn.style.backgroundColor = "#b2d3ef";
+            btn.style.marginLeft = "10px";
+            btn.style.border = "2px solid #4f5c7b";
+            btn.style.height = "42px";
+            if (!flagList.includes(scope) && scope != "All") {
+                btn.style.display = "none";
+            }
+            btn.onclick = () => {
+                openOrders(scope);
+                return false;
+            }
+            return btn;
+        }
+        // Helper function to add listeners since adding them above applies only to last button
+        function addListeners(button) {
+            button.addEventListener("mouseenter", (event) => {
+                button.style.backgroundColor = "#8bb3d5"
+            });
+            button.addEventListener("mouseleave", (event) => {
+                button.style.backgroundColor = "#b2d3ef"
+            });
+            button.addEventListener("mousedown", (event) => {
+                button.style.backgroundColor = "#4b88ff";
+            });
+            button.addEventListener("mouseup", (event) => {
+                button.style.backgroundColor = "#cddeff";
+            });
+        }
+        btnAll = createButton("Open All Assigned", "All");
+        btnAll.style.marginLeft = "0px";
+        btnNon = createButton("Open No Flags", "None");
+        btnFraud = createButton("Open Fraud Orders", "Fraud Review");
+        btnCmt = createButton("Open Comments", "Comment");
+        btnTax = createButton("Open Tax Exempts", "Tax Exempt");
+        btnAdd = createButton("Open Address Validation", "Address Validation");
+        btnSal = createButton("Open Sales Rep", "Sales Rep");
+        btnLGP = createButton("Open Low Gross Profit", "Low Gross Profit");
+        btnZer = createButton("Open $0 Orders", "$0 Order");
+        btnUS48 = createButton("Open !US48s", "Outside US48");
+        btnContainer.appendChild(btnAll);
+        addListeners(btnAll);
+        btnContainer.appendChild(btnNon);
+        addListeners(btnNon);
+        btnContainer.appendChild(btnFraud);
+        addListeners(btnFraud);
+        btnContainer.appendChild(btnCmt);
+        addListeners(btnCmt);
+        btnContainer.appendChild(btnTax);
+        addListeners(btnTax);
+        btnContainer.appendChild(btnAdd);
+        addListeners(btnAdd);
+        btnContainer.appendChild(btnSal);
+        addListeners(btnSal);
+        btnContainer.appendChild(btnLGP);
+        addListeners(btnLGP);
+        btnContainer.appendChild(btnZer);
+        addListeners(btnZer);
+        btnContainer.appendChild(btnUS48);
+        addListeners(btnUS48);
+        document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(btnContainer);
 }
 
 const tableCheck = VM.observe(document.body, () => {
@@ -160,8 +294,7 @@ const tableCheck = VM.observe(document.body, () => {
     const node = document.querySelector("#row0 > td:nth-child(1)");
   
     if (node) {
-      // console.log('Building item table')
-        makeButton();
+        makeButtons();
   
       // disconnect observer
       return true;
