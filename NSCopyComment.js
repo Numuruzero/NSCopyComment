@@ -6,7 +6,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.45
+// @version     1.451
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -37,6 +37,7 @@ if (url.includes("transactionlist")) {
         flags: 0,
         set: false
     };
+
 
     // Important note: the browser may block pop-ups if opening multiple tabs. The user can either click the "Pop Ups Blocked" notification in the URL bar and allow them, or on Chrome navigate to Settings > Privacy and security > Site settings > Pop-ups and redirects (chrome://settings/content/popups) and then add NetSuite
     function open_tabs(urls) {
@@ -131,6 +132,19 @@ if (url.includes("transactionlist")) {
         return ordersTable;
     }
 
+    // Flag totals will be set only for orders with (any) OP (change this?)
+    let flagTotals = {
+        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48"],
+        "Fraud Review": 0,
+        "Comment": 0,
+        "Tax Exempt": 0,
+        "Address Validation": 0,
+        "Sales Rep": 0,
+        "Low Gross Profit": 0,
+        "$0 Order": 0,
+        "Outside US48": 0
+    }
+
     const readOrders = () => {
         function Order() {
             this.so = "";
@@ -158,6 +172,7 @@ if (url.includes("transactionlist")) {
                 }
             }
         }
+
         const tableState = buildOrdersTable();
         debug(tableState);
         let orderInfo = [];
@@ -177,6 +192,9 @@ if (url.includes("transactionlist")) {
                 debug(error);
             }
         }
+        // flagTotals.flagTypes.forEach((type) => {
+
+        // })
         return orderInfo;
     }
 
@@ -185,7 +203,6 @@ if (url.includes("transactionlist")) {
         // Experimental selector to find user's name
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const tableState = readOrders();
-        // const tableState = readOrders();
         debug(tableState);
         const orderURLs = [];
         for (let i = 0; i <= tableState.length - 1; i++) {
@@ -212,8 +229,29 @@ if (url.includes("transactionlist")) {
         open_tabs(orderURLs);
     }
 
+
+    // Helper function to add listeners since adding them above applies only to last button
+    const controller = new AbortController();
+    function addListeners(button) {
+        const listenOptions = { signal: controller.signal }
+        button.addEventListener("mouseenter", (event) => {
+            button.style.backgroundColor = "#8bb3d5"
+        }, listenOptions);
+        button.addEventListener("mouseleave", (event) => {
+            button.style.backgroundColor = "#b2d3ef"
+        }, listenOptions);
+        button.addEventListener("mousedown", (event) => {
+            button.style.backgroundColor = "#4b88ff";
+        }, listenOptions);
+        button.addEventListener("mouseup", (event) => {
+            button.style.backgroundColor = "#cddeff";
+        }, listenOptions);
+    }
+
+    let allBtns;
+
     const makeButtons = () => {
-        btnContainer = document.createElement("div");
+        const btnContainer = document.createElement("div");
         btnContainer.style.backgroundColor = "#f0f8ff";
         btnContainer.style.display = "inline-flex";
         btnContainer.style.padding = "10px";
@@ -232,14 +270,16 @@ if (url.includes("transactionlist")) {
             }
         }
         debug(flagList);
+
         // Function to create buttons below and keep style standard
         function createButton(text, scope) {
-            btn = document.createElement("button");
+            const btn = document.createElement("button");
             btn.innerHTML = text;
             btn.style.backgroundColor = "#b2d3ef";
             btn.style.marginLeft = "10px";
             btn.style.border = "2px solid #4f5c7b";
             btn.style.height = "42px";
+            btn.id = `opbtn${scope.replaceAll(" ", "-")}`
             if (!flagList.includes(scope) && scope != "All") {
                 btn.style.display = "none";
             }
@@ -249,53 +289,50 @@ if (url.includes("transactionlist")) {
             }
             return btn;
         }
-        // Helper function to add listeners since adding them above applies only to last button
-        function addListeners(button) {
-            button.addEventListener("mouseenter", (event) => {
-                button.style.backgroundColor = "#8bb3d5"
-            });
-            button.addEventListener("mouseleave", (event) => {
-                button.style.backgroundColor = "#b2d3ef"
-            });
-            button.addEventListener("mousedown", (event) => {
-                button.style.backgroundColor = "#4b88ff";
-            });
-            button.addEventListener("mouseup", (event) => {
-                button.style.backgroundColor = "#cddeff";
-            });
-        }
-        btnAll = createButton("Open All Assigned", "All");
+
+        const btnAll = createButton("Open All Assigned", "All");
         btnAll.style.marginLeft = "0px";
-        btnNon = createButton("Open No Flags", "None");
-        btnFraud = createButton("Open Fraud Orders", "Fraud Review");
-        btnCmt = createButton("Open Comments", "Comment");
-        btnTax = createButton("Open Tax Exempts", "Tax Exempt");
-        btnAdd = createButton("Open Address Validation", "Address Validation");
-        btnSal = createButton("Open Sales Rep", "Sales Rep");
-        btnLGP = createButton("Open Low Gross Profit", "Low Gross Profit");
-        btnZer = createButton("Open $0 Orders", "$0 Order");
-        btnUS48 = createButton("Open !US48s", "Outside US48");
-        btnContainer.appendChild(btnAll);
-        addListeners(btnAll);
-        btnContainer.appendChild(btnNon);
-        addListeners(btnNon);
-        btnContainer.appendChild(btnFraud);
-        addListeners(btnFraud);
-        btnContainer.appendChild(btnCmt);
-        addListeners(btnCmt);
-        btnContainer.appendChild(btnTax);
-        addListeners(btnTax);
-        btnContainer.appendChild(btnAdd);
-        addListeners(btnAdd);
-        btnContainer.appendChild(btnSal);
-        addListeners(btnSal);
-        btnContainer.appendChild(btnLGP);
-        addListeners(btnLGP);
-        btnContainer.appendChild(btnZer);
-        addListeners(btnZer);
-        btnContainer.appendChild(btnUS48);
-        addListeners(btnUS48);
+        const btnNon = createButton("Open No Flags", "None");
+        const btnFraud = createButton("Open Fraud Orders", "Fraud Review");
+        const btnCmt = createButton("Open Comments", "Comment");
+        const btnTax = createButton("Open Tax Exempts", "Tax Exempt");
+        const btnAdd = createButton("Open Address Validation", "Address Validation");
+        const btnSal = createButton("Open Sales Rep", "Sales Rep");
+        const btnLGP = createButton("Open Low Gross Profit", "Low Gross Profit");
+        const btnZer = createButton("Open $0 Orders", "$0 Order");
+        const btnUS48 = createButton("Open !US48s", "Outside US48");
+        allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLGP, btnZer, btnUS48]
+        allBtns.forEach((button) => {
+            btnContainer.appendChild(button);
+            addListeners(button);
+        })
         document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(btnContainer);
+    }
+
+    const startListening = () => {
+        // Select the node that will be observed for mutations
+        const targetNode = document.querySelector("#div__body");
+
+        // Options for the observer (which mutations to observe)
+        const config = { attributes: true, childList: true, subtree: true };
+
+        // Callback function to execute when mutations are observed
+        const callback = (mutationList, observer) => {
+            for (const mutation of mutationList) {
+                if (mutation.type === "attributes" && mutation.attributeName === "data-tooltip-enabled") {
+                    // call readOrders(), determine how many of each type are in OP name? Update color and add count to buttons?
+                    // allBtns should be an array which still contains the button objects
+                    console.log(`The ${mutation.attributeName} attribute was modified.`);
+                    console.log(mutation);
+                }
+            }
+        };
+
+        // Create an observer instance linked to the callback function
+        const observer = new MutationObserver(callback);
+
+        // Start observing the target node for configured mutations
+        observer.observe(targetNode, config);
     }
 
     const tableCheck = VM.observe(document.body, () => {
@@ -304,6 +341,7 @@ if (url.includes("transactionlist")) {
 
         if (node) {
             makeButtons();
+            startListening();
 
             // disconnect observer
             return true;
@@ -688,6 +726,13 @@ const createSearchLinks = () => {
     return links;
 }
 
+// Creates a copy of the "New Note" button underneath the flags
+const copyNoteButton = () => {
+    const noteButton = document.createElement("button");
+    noteButton.innerHTML = document.querySelector("#tdbody_newhist").innerHTML;
+    document.querySelector("#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(4) > td > div").after(noteButton);
+}
+
 const loadCheck = VM.observe(document.body, () => {
     // Find the target node
     const node = document.querySelector("#custom189_div");
@@ -702,6 +747,7 @@ const loadCheck = VM.observe(document.body, () => {
         fraudFrame.contentWindow.document.open();
         fraudFrame.contentWindow.document.write(html);
         fraudFrame.contentWindow.document.close();
+        copyNoteButton();
 
         // disconnect observer
         return true;
