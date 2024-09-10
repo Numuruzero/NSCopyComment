@@ -6,7 +6,8 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
-// @version     1.451
+// @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
+// @version     1.455
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -15,6 +16,10 @@
 const edCheck = new RegExp('e=T');
 const url = window.location.href;
 const isEd = edCheck.test(url);
+
+// Determine if record is estimate
+const estCheck = new RegExp(/estimate\.nl/);
+const isEST = estCheck.test(url);
 
 const perfDebug = false;
 
@@ -142,7 +147,9 @@ if (url.includes("transactionlist")) {
         "Sales Rep": 0,
         "Low Gross Profit": 0,
         "$0 Order": 0,
-        "Outside US48": 0
+        "Outside US48": 0,
+        "None": 0,
+        "All": 0
     }
 
     const readOrders = () => {
@@ -163,6 +170,7 @@ if (url.includes("transactionlist")) {
                     if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
                     if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
                     if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
+                    if (this.text == " ") { this.types.push("None") };
                 },
                 getCommentType: function () {
                     let cmntType = "";
@@ -212,11 +220,6 @@ if (url.includes("transactionlist")) {
                         orderURLs.push(tableState[i].url);
                     }
                     break;
-                case "None":
-                    if (tableState[i].op == userName && tableState[i].flags.types.length == 0) {
-                        orderURLs.push(tableState[i].url);
-                    }
-                    break;
                 default:
                     if (tableState[i].op == userName && tableState[i].flags.types.includes(scope)) {
                         orderURLs.push(tableState[i].url);
@@ -227,6 +230,33 @@ if (url.includes("transactionlist")) {
         debug(orderURLs);
         debug(userName);
         open_tabs(orderURLs);
+    }
+
+    const countOrders = () => {
+        const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
+        const curTable = readOrders();
+        flagTotals = {
+            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48"],
+            "Fraud Review": 0,
+            "Comment": 0,
+            "Tax Exempt": 0,
+            "Address Validation": 0,
+            "Sales Rep": 0,
+            "Low Gross Profit": 0,
+            "$0 Order": 0,
+            "Outside US48": 0,
+            "None": 0,
+            "All": 0
+        }
+        for (let i = 0; i <= curTable.length - 1; i++) {
+            if (curTable[i].op == userName) {
+                curTable[i].flags.types.forEach((flag) => {
+                    flagTotals[flag]++
+                });
+                flagTotals["All"]++
+            }
+        }
+        console.log(flagTotals);
     }
 
 
@@ -274,19 +304,23 @@ if (url.includes("transactionlist")) {
         // Function to create buttons below and keep style standard
         function createButton(text, scope) {
             const btn = document.createElement("button");
-            btn.innerHTML = text;
+            btn.textIn = text;
+            btn.flagType = scope;
+            const countp = document.createElement("p");
+            countp.innerHTML = `${text} (${flagTotals[scope]})`
             btn.style.backgroundColor = "#b2d3ef";
             btn.style.marginLeft = "10px";
             btn.style.border = "2px solid #4f5c7b";
             btn.style.height = "42px";
             btn.id = `opbtn${scope.replaceAll(" ", "-")}`
-            if (!flagList.includes(scope) && scope != "All") {
+            if (!flagList.includes(scope) && scope != "All" && scope != "None") {
                 btn.style.display = "none";
             }
             btn.onclick = () => {
                 openOrders(scope);
                 return false;
             }
+            btn.appendChild(countp);
             return btn;
         }
 
@@ -324,6 +358,13 @@ if (url.includes("transactionlist")) {
                     // allBtns should be an array which still contains the button objects
                     console.log(`The ${mutation.attributeName} attribute was modified.`);
                     console.log(mutation);
+                    console.log(allBtns);
+                    setTimeout(() => {
+                        countOrders();
+                        allBtns.forEach((button) => {
+                            button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType]})</p>`
+                        }), 500
+                    })
                 }
             }
         };
@@ -730,7 +771,7 @@ const createSearchLinks = () => {
 const copyNoteButton = () => {
     const noteButton = document.createElement("button");
     noteButton.innerHTML = document.querySelector("#tdbody_newhist").innerHTML;
-    document.querySelector("#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(4) > td > div").after(noteButton);
+    document.querySelector(`#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(${isEd ? "5" : "4"}) > td > div`).after(noteButton);
 }
 
 const loadCheck = VM.observe(document.body, () => {
@@ -747,7 +788,9 @@ const loadCheck = VM.observe(document.body, () => {
         fraudFrame.contentWindow.document.open();
         fraudFrame.contentWindow.document.write(html);
         fraudFrame.contentWindow.document.close();
-        copyNoteButton();
+        if (!isEST) {
+            copyNoteButton();
+        }
 
         // disconnect observer
         return true;
