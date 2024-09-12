@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.455
+// @version     1.46
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -139,7 +139,7 @@ if (url.includes("transactionlist")) {
 
     // Flag totals will be set only for orders with (any) OP (change this?)
     let flagTotals = {
-        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48"],
+        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
         "Fraud Review": 0,
         "Comment": 0,
         "Tax Exempt": 0,
@@ -170,7 +170,7 @@ if (url.includes("transactionlist")) {
                     if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
                     if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
                     if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
-                    if (this.text == " ") { this.types.push("None") };
+                    if (this.text == ' \n') { this.types.push("None") };
                 },
                 getCommentType: function () {
                     let cmntType = "";
@@ -211,21 +211,30 @@ if (url.includes("transactionlist")) {
         // Experimental selector to find user's name
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const tableState = readOrders();
+        const flagOrder = [];
+        document.querySelector("#flaglist").childNodes.forEach((node) => {
+            flagOrder.push(node.flagType);
+        });
         debug(tableState);
         const orderURLs = [];
-        for (let i = 0; i <= tableState.length - 1; i++) {
-            switch (scope) {
-                case "All":
-                    if (tableState[i].op == userName) {
-                        orderURLs.push(tableState[i].url);
-                    }
-                    break;
-                default:
+        switch (scope) {
+            case "All":
+                // Foreach flag types, loop through orders
+                flagOrder.forEach((type) => {
+                    for (let j = 0; j <= tableState.length - 1; j++) {
+                        if (tableState[j].op == userName && tableState[j].flags.types[0] == type) {
+                            orderURLs.push(tableState[j].url);
+                        }
+                    };
+                })
+                break;
+            default:
+                for (let i = 0; i <= tableState.length - 1; i++) {
                     if (tableState[i].op == userName && tableState[i].flags.types.includes(scope)) {
                         orderURLs.push(tableState[i].url);
                     }
-                    break;
-            }
+                }
+                break;
         }
         debug(orderURLs);
         debug(userName);
@@ -236,7 +245,7 @@ if (url.includes("transactionlist")) {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const curTable = readOrders();
         flagTotals = {
-            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48"],
+            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
             "Fraud Review": 0,
             "Comment": 0,
             "Tax Exempt": 0,
@@ -279,8 +288,18 @@ if (url.includes("transactionlist")) {
     }
 
     let allBtns;
+    let allLis;
 
     const makeButtons = () => {
+        // Possibly just make a div with inline block style and set innerHTML to list and script
+        // Should build this dynamically depending on what is on the list - maybe what is selected?
+        const selectorHTML = `<ul id="flaglist" style="padding-left: 12px; margin-right: 12px"> <li id="lifraud" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Fraud Review </li> <li id="licmt" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Comment </li> <li id="litax" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Tax Exempt </li> <li id="liadd" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Address Validation </li> <li id="lisr" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Sales Rep </li> <li id="lilgr" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Low Gross Profit </li> <li id="lizer" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > $0 Order </li> <li id="lius48" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Outside US48 </li> <li id="linon" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > None </li> </ul>`;
+        const selector = document.createElement("div");
+        selector.style.display = "inline-block";
+        const selectorUL = document.createElement("ul");
+        selectorUL.id = "flaglist";
+        selectorUL.style.paddingLeft = "12px";
+        selectorUL.style.marginRight = "12px";
         const btnContainer = document.createElement("div");
         btnContainer.style.backgroundColor = "#f0f8ff";
         btnContainer.style.display = "inline-flex";
@@ -301,6 +320,45 @@ if (url.includes("transactionlist")) {
         }
         debug(flagList);
 
+        // Function to create list items for sorting list
+        function createListItem(text, id, scope) {
+            const li = document.createElement("li");
+            li.flagType = scope;
+            li.innerHTML = text;
+            li.id = id;
+            li.style.listStyleType = "decimal";
+            li.style.border = "1px solid black";
+            li.style.borderRadius = "10px";
+            li.style.textAlign = "center";
+            li.style.padding = "2px 4px";
+            li.style.margin = "2px 0px";
+            li.style.fontSize = "8px";
+            li.style.width = "85px";
+            li.style.cursor = "move";
+            li.style.cursor = "-webkit-grabbing";
+            if (!flagList.includes(scope) && scope != "None") {
+                li.style.display = "none";
+            }
+            return li;
+        }
+
+        const liFraud = createListItem("Fraud Review", "lifraud", "Fraud Review");
+        const liCmt = createListItem("Comment", "licmt", "Comment");
+        const liTax = createListItem("Tax Exempt", "litax", "Tax Exempt");
+        const liAdd = createListItem("Address Validation", "liadd", "Address Validation");
+        const liSR = createListItem("Sales Rep", "lisr", "Sales Rep");
+        const liLGR = createListItem("Low Gross Profit", "lilgr", "Low Gross Profit");
+        const liZer = createListItem("$0 Order", "lizer", "$0 Order");
+        const liUS48 = createListItem("Outside US48", "lius48", "Outside US48");
+        const liNon = createListItem("None", "linon", "None");
+
+        allLis = [liFraud, liCmt, liTax, liAdd, liSR, liLGR, liZer, liUS48, liNon];
+
+        allLis.forEach((listem) => {
+            selectorUL.appendChild(listem);
+        });
+        selector.appendChild(selectorUL);
+
         // Function to create buttons below and keep style standard
         function createButton(text, scope) {
             const btn = document.createElement("button");
@@ -312,6 +370,7 @@ if (url.includes("transactionlist")) {
             btn.style.marginLeft = "10px";
             btn.style.border = "2px solid #4f5c7b";
             btn.style.height = "42px";
+            btn.style.alignSelf = "center";
             btn.id = `opbtn${scope.replaceAll(" ", "-")}`
             if (!flagList.includes(scope) && scope != "All" && scope != "None") {
                 btn.style.display = "none";
@@ -336,11 +395,17 @@ if (url.includes("transactionlist")) {
         const btnZer = createButton("Open $0 Orders", "$0 Order");
         const btnUS48 = createButton("Open !US48s", "Outside US48");
         allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLGP, btnZer, btnUS48]
+        btnContainer.appendChild(selector);
         allBtns.forEach((button) => {
             btnContainer.appendChild(button);
             addListeners(button);
         })
         document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(btnContainer);
+        const list = document.querySelector("#flaglist");
+        const sortable = Sortable.create(list, {
+            sort: true,
+            animation: 150,
+        });
     }
 
     const startListening = () => {
@@ -363,8 +428,13 @@ if (url.includes("transactionlist")) {
                         countOrders();
                         allBtns.forEach((button) => {
                             button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType]})</p>`
-                        }), 500
-                    })
+                        })
+                        allLis.forEach((listem) => {
+                            if (flagTotals[listem.flagType] > 0) {
+                                listem.style.display = "list-item";
+                            } else { listem.style.display = "none" };
+                        })
+                    }, 500)
                 }
             }
         };
@@ -383,6 +453,8 @@ if (url.includes("transactionlist")) {
         if (node) {
             makeButtons();
             startListening();
+            // Uncomment below to set permanent height for order table
+            // document.querySelector("#div__body").style.height = 560px;
 
             // disconnect observer
             return true;
