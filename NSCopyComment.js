@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.46
+// @version     1.461
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -163,10 +163,10 @@ if (url.includes("transactionlist")) {
                 types: [],
                 setFlagTypes: function () {
                     if (this.text.includes("Fraud Review:")) { this.types.push("Fraud Review") };
-                    if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
-                    if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
                     if (this.text.includes("Address Validation")) { this.types.push("Address Validation") };
                     if (this.text.includes("Sales Rep:")) { this.types.push("Sales Rep") };
+                    if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
+                    if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
                     if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
                     if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
                     if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
@@ -352,7 +352,8 @@ if (url.includes("transactionlist")) {
         const liUS48 = createListItem("Outside US48", "lius48", "Outside US48");
         const liNon = createListItem("None", "linon", "None");
 
-        allLis = [liFraud, liCmt, liTax, liAdd, liSR, liLGR, liZer, liUS48, liNon];
+        // The order here will determine default order
+        allLis = [liCmt, liSR, liAdd, liTax, liLGR, liZer, liUS48, liNon, liFraud];
 
         allLis.forEach((listem) => {
             selectorUL.appendChild(listem);
@@ -384,6 +385,7 @@ if (url.includes("transactionlist")) {
         }
 
         const btnAll = createButton("Open All Assigned", "All");
+        // Default behavior is to set display to none if there are no "scope" orders in the list; no orders will be "All"
         btnAll.style.marginLeft = "0px";
         const btnNon = createButton("Open No Flags", "None");
         const btnFraud = createButton("Open Fraud Orders", "Fraud Review");
@@ -841,9 +843,24 @@ const createSearchLinks = () => {
 
 // Creates a copy of the "New Note" button underneath the flags
 const copyNoteButton = () => {
-    const noteButton = document.createElement("button");
-    noteButton.innerHTML = document.querySelector("#tdbody_newhist").innerHTML;
-    document.querySelector(`#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(${isEd ? "5" : "4"}) > td > div`).after(noteButton);
+    try {
+        console.log("Copying button...")
+        const oldNote = document.querySelector("#newhist");
+        const newNote = oldNote.cloneNode(true);
+        noteButton = document.createElement("div");
+        noteButton.style.backgroundColor = "#ededdb";
+        noteButton.style.border = "1px solid black";
+        noteButton.style.borderRadius = "5px";
+        noteButton.style.width = "65px";
+        noteButton.style.height = "30px";
+        noteButton.style.display = "flex";
+        noteButton.style.flexWrap = "wrap";
+        noteButton.style.alignContent = "center";
+        noteButton.appendChild(newNote);
+        document.querySelector(`#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(${isEd ? "5" : "4"}) > td > div`).after(noteButton);
+    } catch (error) {
+        console.log(error);
+    }
 }
 
 const loadCheck = VM.observe(document.body, () => {
