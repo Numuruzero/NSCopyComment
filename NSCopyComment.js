@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.461
+// @version     1.47
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -305,6 +305,7 @@ if (url.includes("transactionlist")) {
         btnContainer.style.display = "inline-flex";
         btnContainer.style.padding = "10px";
         btnContainer.style.border = "2px solid #7595cc";
+        btnContainer.style.position = "absolute";
         // Finish container
         // Make table to check flags for
         const flagTable = readOrders();
@@ -457,6 +458,11 @@ if (url.includes("transactionlist")) {
             startListening();
             // Uncomment below to set permanent height for order table
             // document.querySelector("#div__body").style.height = 560px;
+            // document.querySelector("#body_actions")
+            // Uncomment below to set options for controls above order tables
+            const marginDiv = document.createElement("div");
+            marginDiv.style.marginTop = "152px";
+            document.querySelector("#footer_actions_form").before(marginDiv);
 
             // disconnect observer
             return true;
