@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.47
+// @version     1.471
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -291,8 +291,6 @@ if (url.includes("transactionlist")) {
     let allLis;
 
     const makeButtons = () => {
-        // Possibly just make a div with inline block style and set innerHTML to list and script
-        // Should build this dynamically depending on what is on the list - maybe what is selected?
         const selectorHTML = `<ul id="flaglist" style="padding-left: 12px; margin-right: 12px"> <li id="lifraud" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Fraud Review </li> <li id="licmt" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Comment </li> <li id="litax" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Tax Exempt </li> <li id="liadd" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Address Validation </li> <li id="lisr" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Sales Rep </li> <li id="lilgr" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Low Gross Profit </li> <li id="lizer" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > $0 Order </li> <li id="lius48" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > Outside US48 </li> <li id="linon" style=" list-style-type: decimal; border: 1px solid black; border-radius: 10px; text-align: center; padding: 2px 4px; margin: 2px 0px; font-size: 8px; width: 85px; cursor: move; cursor: -webkit-grabbing; " > None </li> </ul>`;
         const selector = document.createElement("div");
         selector.style.display = "inline-block";
@@ -306,6 +304,8 @@ if (url.includes("transactionlist")) {
         btnContainer.style.padding = "10px";
         btnContainer.style.border = "2px solid #7595cc";
         btnContainer.style.position = "absolute";
+        btnContainer.style.top = "54px";
+        btnContainer.style.left = "30px";
         // Finish container
         // Make table to check flags for
         const flagTable = readOrders();
@@ -399,11 +399,13 @@ if (url.includes("transactionlist")) {
         const btnUS48 = createButton("Open !US48s", "Outside US48");
         allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLGP, btnZer, btnUS48]
         btnContainer.appendChild(selector);
+        btnContainer.id = "btncontrol";
         allBtns.forEach((button) => {
             btnContainer.appendChild(button);
             addListeners(button);
         })
-        document.querySelector("#body > div > div.uir-page-title-firstline > h1").after(btnContainer);
+        // document.querySelector("#body > div > div.uir-page-title-firstline > h1").insertAdjacentElement('afterend', btnContainer);
+        document.querySelector("#body > div.uir-page-title.uir-page-title-list.uir-list-title.noprint").insertAdjacentElement('afterend', btnContainer);
         const list = document.querySelector("#flaglist");
         const sortable = Sortable.create(list, {
             sort: true,
@@ -430,7 +432,7 @@ if (url.includes("transactionlist")) {
                     setTimeout(() => {
                         countOrders();
                         allBtns.forEach((button) => {
-                            button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType]})</p>`
+                            button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType]})</p>`;
                         })
                         allLis.forEach((listem) => {
                             if (flagTotals[listem.flagType] > 0) {
@@ -461,7 +463,8 @@ if (url.includes("transactionlist")) {
             // document.querySelector("#body_actions")
             // Uncomment below to set options for controls above order tables
             const marginDiv = document.createElement("div");
-            marginDiv.style.marginTop = "152px";
+            marginDiv.style.marginTop = "234px";
+            marginDiv.id = "spacerdiv"
             document.querySelector("#footer_actions_form").before(marginDiv);
 
             // disconnect observer
@@ -731,13 +734,13 @@ const parseAddress = () => {
 }
 
 /**
- * 
+ *
  * @param {string} platform - The platform on which the search will be performed. Currently: TruePeopleSearch, FastPeopleSearch, Google
  * @param {string} type - The mode of search. Currently: phone, address, name, general
- * @param {string} term1 - 
- * @param {string} term2 
- * @param {string} term3 
- * @returns 
+ * @param {string} term1 -
+ * @param {string} term2
+ * @param {string} term3
+ * @returns
  */
 const buildSearchLink = (platform, type, term1, term2, term3) => {
     return;
