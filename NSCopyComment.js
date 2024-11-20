@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.472
+// @version     1.473
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -482,9 +482,13 @@ if (url.includes("transactionlist")) {
 function changeLogResize() {
   if (document.querySelector('[data-nsps-label="Line Item Change Log"]')) {
     const changeLog = document.querySelector('[data-nsps-label="Line Item Change Log"]');
-    changeLog.style.overflow = "auto";
-    changeLog.style.resize = "vertical";
-    changeLog.style.height = "85px";
+    if (changeLog.offsetHeight > 225) {
+      changeLog.style.overflow = "auto";
+      changeLog.style.resize = "vertical";
+      changeLog.style.border = "1px solid black";
+      changeLog.style.height = "225px";
+    }
+    // changeLog.style.height = "85px";
   }
 }
 
@@ -684,9 +688,11 @@ const parseAddress = () => {
             case cszReg.test(element):
                 debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
-                cst.ship.city = csz.groups.city;
-                cst.ship.state = csz.groups.state;
-                cst.ship.zip = csz.groups.zip;
+                if (csz) {
+                  cst.ship.city = csz.groups.city;
+                  cst.ship.state = csz.groups.state;
+                  cst.ship.zip = csz.groups.zip;
+                }
                 break;
             case countryReg.test(element):
                 debug(`Country (${currentSearch}) found on line ${index + 1}`);
@@ -719,9 +725,11 @@ const parseAddress = () => {
             case cszReg.test(element):
                 debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
-                cst.bill.city = csz.groups.city;
-                cst.bill.state = csz.groups.state;
-                cst.bill.zip = csz.groups.zip;
+                if (csz) {
+                  cst.bill.city = csz.groups.city;
+                  cst.bill.state = csz.groups.state;
+                  cst.bill.zip = csz.groups.zip;
+                }
                 break;
             case countryReg.test(element):
                 debug(`Country (${currentSearch}) found on line ${index + 1}`);
@@ -889,6 +897,9 @@ const loadCheck = VM.observe(document.body, () => {
 
     if (node) {
         changeLogResize();
+        if (!isEST) {
+          copyNoteButton();
+        }
         parseAddress();
         const links = createSearchLinks();
         // We are lazy and let the browser figure out that a space in a link is the same as %20
@@ -898,9 +909,6 @@ const loadCheck = VM.observe(document.body, () => {
         fraudFrame.contentWindow.document.open();
         fraudFrame.contentWindow.document.write(html);
         fraudFrame.contentWindow.document.close();
-        if (!isEST) {
-            copyNoteButton();
-        }
 
         // disconnect observer
         return true;
