@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.471
+// @version     1.472
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -463,7 +463,7 @@ if (url.includes("transactionlist")) {
             // document.querySelector("#body_actions")
             // Uncomment below to set options for controls above order tables
             const marginDiv = document.createElement("div");
-            marginDiv.style.marginTop = "234px";
+            marginDiv.style.marginTop = "250px";
             marginDiv.id = "spacerdiv"
             document.querySelector("#footer_actions_form").before(marginDiv);
 
@@ -477,6 +477,17 @@ if (url.includes("transactionlist")) {
 ////////////////////////////////////END TRANSACTION/SEARCH SCRIPTS/////////////////////////////////////
 ////////////////////////////////BEGIN SALES ORDER AND ESTIMATE SCRIPTS////////////////////////////////
 ///////////////////////////////BEGIN DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
+
+// Function to resize potentially giant changelogs
+function changeLogResize() {
+  if (document.querySelector('[data-nsps-label="Line Item Change Log"]')) {
+    const changeLog = document.querySelector('[data-nsps-label="Line Item Change Log"]');
+    changeLog.style.overflow = "auto";
+    changeLog.style.resize = "vertical";
+    changeLog.style.height = "85px";
+  }
+}
+
 // Function for delivery instructions button to invoke
 // Copy text from cst comments to delivery instructions, and add space if text is already present
 const copyToDelIns = () => {
@@ -866,7 +877,7 @@ const copyNoteButton = () => {
         noteButton.style.flexWrap = "wrap";
         noteButton.style.alignContent = "center";
         noteButton.appendChild(newNote);
-        document.querySelector(`#tr_fg_fieldGroup471 > td:nth-child(1) > table > tbody > tr:nth-child(${isEd ? "5" : "4"}) > td > div`).after(noteButton);
+        document.querySelector("#custbody_order_processing_flags_val").parentNode.parentNode.after(noteButton);
     } catch (error) {
         console.log(error);
     }
@@ -877,6 +888,7 @@ const loadCheck = VM.observe(document.body, () => {
     const node = document.querySelector("#custom189_div");
 
     if (node) {
+        changeLogResize();
         parseAddress();
         const links = createSearchLinks();
         // We are lazy and let the browser figure out that a space in a link is the same as %20
