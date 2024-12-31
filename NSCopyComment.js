@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.473
+// @version     1.474
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -139,12 +139,13 @@ if (url.includes("transactionlist")) {
 
     // Flag totals will be set only for orders with (any) OP (change this?)
     let flagTotals = {
-        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
+        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "LOA Needed", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
         "Fraud Review": 0,
         "Comment": 0,
         "Tax Exempt": 0,
         "Address Validation": 0,
         "Sales Rep": 0,
+        "LOA Needed": 0,
         "Low Gross Profit": 0,
         "$0 Order": 0,
         "Outside US48": 0,
@@ -165,6 +166,7 @@ if (url.includes("transactionlist")) {
                     if (this.text.includes("Fraud Review:")) { this.types.push("Fraud Review") };
                     if (this.text.includes("Address Validation")) { this.types.push("Address Validation") };
                     if (this.text.includes("Sales Rep:")) { this.types.push("Sales Rep") };
+                    if (this.text.includes("Large Order Approval")) { this.types.push("LOA Needed") };
                     if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
                     if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
                     if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
@@ -245,12 +247,13 @@ if (url.includes("transactionlist")) {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const curTable = readOrders();
         flagTotals = {
-            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
+            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "LOA Needed", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
             "Fraud Review": 0,
             "Comment": 0,
             "Tax Exempt": 0,
             "Address Validation": 0,
             "Sales Rep": 0,
+            "LOA Needed": 0,
             "Low Gross Profit": 0,
             "$0 Order": 0,
             "Outside US48": 0,
@@ -348,13 +351,14 @@ if (url.includes("transactionlist")) {
         const liTax = createListItem("Tax Exempt", "litax", "Tax Exempt");
         const liAdd = createListItem("Address Validation", "liadd", "Address Validation");
         const liSR = createListItem("Sales Rep", "lisr", "Sales Rep");
+        const liLOA = createListItem("LOA Needed", "liloa", "LOA Needed");
         const liLGR = createListItem("Low Gross Profit", "lilgr", "Low Gross Profit");
         const liZer = createListItem("$0 Order", "lizer", "$0 Order");
         const liUS48 = createListItem("Outside US48", "lius48", "Outside US48");
         const liNon = createListItem("None", "linon", "None");
 
         // The order here will determine default order
-        allLis = [liCmt, liSR, liAdd, liTax, liLGR, liZer, liUS48, liNon, liFraud];
+        allLis = [liCmt, liSR, liLOA, liAdd, liTax, liLGR, liZer, liUS48, liNon, liFraud];
 
         allLis.forEach((listem) => {
             selectorUL.appendChild(listem);
@@ -394,10 +398,11 @@ if (url.includes("transactionlist")) {
         const btnTax = createButton("Open Tax Exempts", "Tax Exempt");
         const btnAdd = createButton("Open Address Validation", "Address Validation");
         const btnSal = createButton("Open Sales Rep", "Sales Rep");
+        const btnLOA = createButton("Open LOA Needed", "LOA Needed");
         const btnLGP = createButton("Open Low Gross Profit", "Low Gross Profit");
         const btnZer = createButton("Open $0 Orders", "$0 Order");
         const btnUS48 = createButton("Open !US48s", "Outside US48");
-        allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLGP, btnZer, btnUS48]
+        allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLOA, btnLGP, btnZer, btnUS48]
         btnContainer.appendChild(selector);
         btnContainer.id = "btncontrol";
         allBtns.forEach((button) => {
