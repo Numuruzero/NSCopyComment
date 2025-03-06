@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.474
+// @version     1.475
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -485,16 +485,16 @@ if (url.includes("transactionlist")) {
 
 // Function to resize potentially giant changelogs
 function changeLogResize() {
-  if (document.querySelector('[data-nsps-label="Line Item Change Log"]')) {
-    const changeLog = document.querySelector('[data-nsps-label="Line Item Change Log"]');
-    if (changeLog.offsetHeight > 225) {
-      changeLog.style.overflow = "auto";
-      changeLog.style.resize = "vertical";
-      changeLog.style.border = "1px solid black";
-      changeLog.style.height = "225px";
+    if (document.querySelector('[data-nsps-label="Line Item Change Log"]')) {
+        const changeLog = document.querySelector('[data-nsps-label="Line Item Change Log"]');
+        if (changeLog.offsetHeight > 225) {
+            changeLog.style.overflow = "auto";
+            changeLog.style.resize = "vertical";
+            changeLog.style.border = "1px solid black";
+            changeLog.style.height = "225px";
+        }
+        // changeLog.style.height = "85px";
     }
-    // changeLog.style.height = "85px";
-  }
 }
 
 // Function for delivery instructions button to invoke
@@ -502,8 +502,21 @@ function changeLogResize() {
 const copyToDelIns = () => {
     const cstComments = document.querySelector("#custbody_customer_order_comments").value;
     const delIns = document.querySelector("#custbody_pacejet_delivery_instructions");
+    if (delIns.value.includes(cstComments)) {
+        return;
+    }
     if (delIns.value !== '') delIns.value += '\n\n';
     delIns.value += cstComments;
+};
+
+const copyToProdMem = () => {
+    const cstComments = document.querySelector("#custbody_customer_order_comments").value;
+    const prodMem = document.querySelector("#custbody20");
+    if (prodMem.value.includes(cstComments)) {
+        return;
+    }
+    if (prodMem.value !== '') prodMem.value += '\n\n';
+    prodMem.value += cstComments;
 };
 
 // Fade a target over 2 seconds
@@ -544,23 +557,11 @@ const popupConfirm = (x, y) => {
     }, 1500);
 };
 
-// Create 'add to delivery instructions' button element
-const createDelInsBtn = () => {
-    const btn = document.createElement("button");
-    let copied = false;
-    const btnText = document.createElement("p");
-    btnText.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
-    btn.appendChild(btnText);
-    btn.style.padding = "3em 2px";
-    btn.style.height = "134px";
-    btn.style.position = "relative";
-    btn.style.display = "inline-flex";
-    btn.style.flexWrap = "wrap";
-    btn.style.alignContent = "center";
-    btn.style.left = "4px";
-    btn.style.bottom = "80px";
-    btn.style.backgroundColor = "#e4eaf5";
-    btn.style.border = "1px solid #508595";
+const formatCopyButton = (btn) => {
+    if (!btn) {
+        console.log("Button not found");
+        return;
+    }
     btn.addEventListener("mouseenter", (event) => {
         btn.style.backgroundColor = "#cddeff";
     });
@@ -573,21 +574,85 @@ const createDelInsBtn = () => {
     btn.addEventListener("mouseup", (event) => {
         btn.style.backgroundColor = "#cddeff";
     });
-    btn.onclick = () => {
-        copyToDelIns();
-        if (copied == false) {
-            btnText.innerHTML += "<br>(Done!)";
-            // btn.style.padding = "30px 2px";
-            btn.style.bottom = "89px";
-        };
-        copied = true;
-        return false;
-    };
-    btn.addEventListener("click", (event) => {
-        popupConfirm(event.clientX, event.clientY);
+}
+
+const createCopyTable = () => {
+    const copyTable = document.createElement("div");
+    copyTable.style.display = "inline-block";
+    copyTable.innerHTML = `<table style="text-align: center; width: 2em; display: inline-block;"><thead><tr><th colspan="2" style="border: 1px solid black; background-color: #bdbdbd; text-align: center;">Copy To:</th></tr></thead><tbody><tr><td class="button" id="delbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;cursor: pointer;user-select: none;">Delivery Instructions</td><td class="button" id="prodbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;height: 86px;cursor: pointer;user-select: none;">Production Memo</td></tr><tr><td class="status" id="delrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td><td class="status" id="prodrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td></tr></tbody></table>`;
+    document.querySelector("#custbody_customer_order_comments").after(copyTable);
+    const awaitTable = VM.observe(document.body, () => {
+        // Find the target node
+        const node = document.querySelector("#delbtn");
+
+        if (node) {
+            const delBtn = document.querySelector("#delbtn");
+            const prodBtn = document.querySelector("#prodbtn");
+            const delRdy = document.querySelector("#delrdy");
+            const prodRdy = document.querySelector("#prodrdy");
+            formatCopyButton(delBtn);
+            delBtn.onclick = () => {
+                copyToDelIns();
+                delRdy.innerHTML = "Done!";
+                delRdy.style.backgroundColor = "#8fce00";
+            }
+            formatCopyButton(prodBtn);
+            prodBtn.onclick = () => {
+                copyToProdMem();
+                prodRdy.innerHTML = "Done!";
+                prodRdy.style.backgroundColor = "#8fce00";
+            }
+
+            // disconnect observer
+            return true;
+        }
     });
-    document.querySelector("#custbody_customer_order_comments").after(btn);
-};
+}
+
+// Create 'add to delivery instructions' button element
+// const createDelInsBtn = () => {
+//     const btn = document.createElement("button");
+//     let copied = false;
+//     const btnText = document.createElement("p");
+//     btnText.innerHTML = "Copy Comment<br> to Delivery<br> Instructions";
+//     btn.appendChild(btnText);
+//     btn.style.padding = "3em 2px";
+//     btn.style.height = "134px";
+//     btn.style.position = "relative";
+//     btn.style.display = "inline-flex";
+//     btn.style.flexWrap = "wrap";
+//     btn.style.alignContent = "center";
+//     btn.style.left = "4px";
+//     btn.style.bottom = "80px";
+//     btn.style.backgroundColor = "#e4eaf5";
+//     btn.style.border = "1px solid #508595";
+//     btn.addEventListener("mouseenter", (event) => {
+//         btn.style.backgroundColor = "#cddeff";
+//     });
+//     btn.addEventListener("mouseleave", (event) => {
+//         btn.style.backgroundColor = "#e4eaf5";
+//     });
+//     btn.addEventListener("mousedown", (event) => {
+//         btn.style.backgroundColor = "#4b88ff";
+//     });
+//     btn.addEventListener("mouseup", (event) => {
+//         btn.style.backgroundColor = "#cddeff";
+//     });
+//     btn.onclick = () => {
+//         copyToDelIns();
+//         if (copied == false) {
+//             btnText.innerHTML += "<br>(Done!)";
+//             // btn.style.padding = "30px 2px";
+//             btn.style.bottom = "89px";
+//         };
+//         copied = true;
+//         return false;
+//     };
+//     btn.addEventListener("click", (event) => {
+//         popupConfirm(event.clientX, event.clientY);
+//     });
+//     document.querySelector("#custbody_customer_order_comments").after(btn);
+// };
 
 const checkIP = () => {
     if (document.querySelector("#custbody78_fs_lbl_uir_label")) {
@@ -616,7 +681,8 @@ if (isEd) {
         const node = document.querySelector("#custbody_customer_order_comments");
 
         if (node) {
-            createDelInsBtn();
+            // createDelInsBtn();
+            createCopyTable();
             // checkIP();
 
             // disconnect observer
@@ -694,9 +760,9 @@ const parseAddress = () => {
                 debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
                 if (csz) {
-                  cst.ship.city = csz.groups.city;
-                  cst.ship.state = csz.groups.state;
-                  cst.ship.zip = csz.groups.zip;
+                    cst.ship.city = csz.groups.city;
+                    cst.ship.state = csz.groups.state;
+                    cst.ship.zip = csz.groups.zip;
                 }
                 break;
             case countryReg.test(element):
@@ -731,9 +797,9 @@ const parseAddress = () => {
                 debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
                 const csz = breakCSZ.exec(element);
                 if (csz) {
-                  cst.bill.city = csz.groups.city;
-                  cst.bill.state = csz.groups.state;
-                  cst.bill.zip = csz.groups.zip;
+                    cst.bill.city = csz.groups.city;
+                    cst.bill.state = csz.groups.state;
+                    cst.bill.zip = csz.groups.zip;
                 }
                 break;
             case countryReg.test(element):
@@ -755,19 +821,6 @@ const parseAddress = () => {
     });
     cst.bill.csz = `${cst.bill.city} ${cst.bill.state} ${cst.bill.zip}`;
     cst.ship.csz = `${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}`;
-}
-
-/**
- *
- * @param {string} platform - The platform on which the search will be performed. Currently: TruePeopleSearch, FastPeopleSearch, Google
- * @param {string} type - The mode of search. Currently: phone, address, name, general
- * @param {string} term1 -
- * @param {string} term2
- * @param {string} term3
- * @returns
- */
-const buildSearchLink = (platform, type, term1, term2, term3) => {
-    return;
 }
 
 const createFraudFrame = () => {
@@ -874,6 +927,46 @@ const createSearchLinks = () => {
     return links;
 }
 
+/////////////////////////////////////END FRAUD CHECK TOOLS//////////////////////////////////////
+////////////////////////////////////////BEGIN CASE TOOL////////////////////////////////////////
+
+const countCases = () => {
+    if (!document.querySelector(`#casesrow0`)) {
+        return "NA";
+    }
+    let caseCount = 0;
+    while (document.querySelector(`#casesrow${caseCount}`)) {
+        caseCount++
+    }
+    return caseCount - 1;
+}
+
+const grabCases = () => {
+    const caseCount = countCases();
+    if (caseCount == "NA") {
+        return caseCount;
+    }
+    let curCase = 0;
+    let curInfo = [];
+    const caseInfo = [];
+    while (curCase <= caseCount) {
+        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[7].textContent);
+        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[5].textContent);
+        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[9].textContent)
+        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[5].firstChild.href);
+        caseInfo.push(curInfo);
+        curInfo = [];
+        curCase++;
+    }
+    console.log(caseInfo);
+}
+
+const showCases = () => {
+    return;
+}
+
+////////////////////////////////////////END CASE TOOL////////////////////////////////////////
+
 // Creates a copy of the "New Note" button underneath the flags
 const copyNoteButton = () => {
     try {
@@ -902,8 +995,9 @@ const loadCheck = VM.observe(document.body, () => {
 
     if (node) {
         changeLogResize();
+        grabCases();
         if (!isEST) {
-          copyNoteButton();
+            copyNoteButton();
         }
         parseAddress();
         const links = createSearchLinks();
