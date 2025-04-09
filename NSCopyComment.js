@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.475
+// @version     1.476
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -654,7 +654,8 @@ const createCopyTable = () => {
 //     document.querySelector("#custbody_customer_order_comments").after(btn);
 // };
 
-const checkIP = () => {
+
+/* const checkIP = () => {
     if (document.querySelector("#custbody78_fs_lbl_uir_label")) {
         const findIP = new RegExp(/(?:\d+\.){3}\d+/);
         try {
@@ -672,7 +673,7 @@ const checkIP = () => {
             return;
         }
     }
-};
+};*/
 
 //Wait until document is sufficiently loaded, then inject button
 if (isEd) {
@@ -692,6 +693,45 @@ if (isEd) {
 };
 
 ///////////////////////////////END DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
+////////////////////////////////////BEGIN FRAUD INFO COPY BUTTON//////////////////////////////////
+const getFraudInfo = () => {
+    if (!document.querySelector("[data-field-name='custbody_kountlink']").innerText.includes("Link")) {
+        return;
+    }
+    const salesOrd = document.querySelector("#tranid_fs_lbl_uir_label").nextElementSibling.innerText;
+    const dateCreated = document.querySelector("#custbody_esc_created_date_fs_lbl_uir_label").nextElementSibling.innerText;
+    const amount = document.querySelector("#custbody34_fs_lbl_uir_label").nextElementSibling.innerText;
+    const riskScore = document.querySelector("[data-field-name='custbody_riskdata'] > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(2) > td:nth-child(2)").innerText;
+    const triggers = document.querySelector("[data-field-name='custbody_riskdata'] > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(4) > td").innerText;
+    const avs = document.querySelector("#custbody119_fs_lbl_uir_label").nextElementSibling.innerText;
+    const cvv = document.querySelector("#custbody118_fs_lbl_uir_label").nextElementSibling.innerText;
+
+    const fraudInfo = [salesOrd, dateCreated, amount, riskScore, triggers, avs, cvv];
+    navigator.clipboard.writeText(fraudInfo.join("	"));
+}
+
+const getFraudInfoBtn = () => {
+    const btn = document.createElement("button");
+    btn.innerHTML = "Copy Fraud Info";
+    const fraudReview = document.querySelector("[data-field-name='custbody78']")
+    fraudReview.insertAdjacentElement("beforebegin", btn);
+    btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        getFraudInfo();
+    });
+}
+////////////////////////////////////END FRAUD INFO COPY BUTTON/////////////////////////////////////
+//////////////////////////////////BEGIN DOUBLE CLICK XML STOPPER//////////////////////////////////
+const stopDoubleClickXml = () => {
+    console.log("Stopping double-click XML");
+    const element = document.querySelector("#main_form > div > div.uir-page-title.uir-page-title-record");
+    element.addEventListener('dblclick', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+    }, true);
+}
+//////////////////////////////////END DOUBLE CLICK XML STOPPER/////////////////////////////////////
 /////////////////////////////////////BEGIN FRAUD CHECK TOOLS//////////////////////////////////////
 
 const bTreeTab = document.querySelector("#custom189_div") ? document.querySelector("#custom189_div") : 'NA';
@@ -999,7 +1039,9 @@ const loadCheck = VM.observe(document.body, () => {
         if (!isEST) {
             copyNoteButton();
         }
+        getFraudInfoBtn();
         parseAddress();
+        stopDoubleClickXml();
         const links = createSearchLinks();
         // We are lazy and let the browser figure out that a space in a link is the same as %20
         const html = `<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <title>Fraud Checking</title> </head> <body> <style> #fraudlinks { display: flex; /* flex-wrap: wrap; */ /* align-content: center; */ justify-content: center; margin-top: 20px; } #addressinfo { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; } #billtodetails { display: inline-block; border: 1px solid black; } #shiptodetails { display: inline-block; border: 1px solid black; margin-left: 12px; } .container { width: auto; min-width: 246px; margin: 0px 6px; padding: 3px 6px; border: 1px solid black; } .result.container { width: 33%; min-width: 165px; } .search { display: flex; flex-wrap: wrap; justify-content: space-between; width: auto; margin: 0px 6px; padding: 3px 6px; } .term { margin-right: 30px; } .links { display: inline-block; flex-wrap: wrap; align-content: center; } .bold { font-weight: 600; } .inline { display: inline; } h3 { margin-top: 0px; align-self: center; justify-content: center; text-align: center; } img { height: 32px; width: 32px; } a { text-decoration: none; } </style> <div id="addressinfo"> <div id="billtodetails" class="container"> <h3>Bill-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.bill.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.bill.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.bill.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.bill.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.bill.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.bill.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.bill.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.bill.country}</p> <br /> </div> <div id="shiptodetails" class="container"> <h3>Ship-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.ship.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.ship.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.ship.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.ship.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.ship.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.ship.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.ship.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.ship.country}</p> <br /> </div> </div> <div id="fraudlinks"> <div class="result container"> <h3>Bill-to Address Searches</h3> ${links.bill.html} </div> <div class="result container"> <h3>Hybrid Searches</h3> ${links.hybrid.html} </div> <div class="result container"> <h3>Ship-to Address Searches</h3> ${links.ship.html} <!-- <div class="search"> <div class="term inline"> <p class="bold">Street/Suite + City/State/Zip:</p> <p> ${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite} ${cst.ship.city} ${cst.ship.state} ${cst.ship.zip} </p> </div> <div class="links"> <a href="https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite}&citystatezip=${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}" target="_blank" > <img src="https://play-lh.googleusercontent.com/aNUH0g2ASIp8tN9OnJpccMxQJDkZLPxrKWhw2OnGkDNA2WLePAOU9iWSXkSt5P3OY_0=w240-h480-rw" alt="TruePeopleSearch" title="TruePeopleSearch" /> </a> </div> </div> --> </div> </div> </body> </html>`;
