@@ -7,7 +7,7 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.476
+// @version     1.477
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -706,7 +706,8 @@ const getFraudInfo = () => {
     const avs = document.querySelector("#custbody119_fs_lbl_uir_label").nextElementSibling.innerText;
     const cvv = document.querySelector("#custbody118_fs_lbl_uir_label").nextElementSibling.innerText;
 
-    const fraudInfo = [salesOrd, dateCreated, amount, riskScore, triggers, avs, cvv];
+    let fraudInfo = [salesOrd, dateCreated, amount, riskScore, triggers, avs, cvv];
+    fraudInfo = fraudInfo.map((el) => `"${el}"`);
     navigator.clipboard.writeText(fraudInfo.join("	"));
 }
 
