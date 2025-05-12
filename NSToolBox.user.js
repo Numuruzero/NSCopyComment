@@ -4,7 +4,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
-// @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSCopyComment.js
+// @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSToolBox.user.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
 // @version     1.477
