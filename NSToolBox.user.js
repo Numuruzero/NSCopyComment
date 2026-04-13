@@ -7,12 +7,10 @@
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSToolBox.user.js
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.478
+// @version     1.5
 // ==/UserScript==
 
 /*jshint esversion: 6 */
-// Floating tool to perform various regular tasks?
-// Potentially could open a new Note in an iFrame and enter a note automatically?
 
 // Declare const to determine if document is in edit mode
 const edCheck = new RegExp('e=T');
@@ -33,15 +31,34 @@ function debug(stuff) {
 
 ///////////////////////////////////BEGIN TRANSACTION/SEARCH SCRIPTS////////////////////////////////////
 
+// TODO: Add more flag types, make it easier to add flags
+// TODO: Make the sort list collapsible and consider if it should be collapsed by default
 // Test if the URL is a transaction search and proceed with relevant scripts
 if (url.includes("transactionlist")) {
 
-    colIndex = {
-        doc: 0,
-        op: 0,
-        status: 0,
-        memo: 0,
-        flags: 0,
+    // New simpler function to capture table data as 2D array
+    // Does not care if the table is in edit mode or not, but may return empty rows if in edit mode
+    // Modified from other scripts to push the actual elements
+    function captureTableData(tableElement) {
+        const rows = tableElement.querySelectorAll("tr");
+        const data = [];
+        rows.forEach(row => {
+            const cols = row.querySelectorAll("td,th");
+            const rowData = [];
+            cols.forEach(col => {
+                rowData.push(col);
+            });
+            data.push(rowData);
+        });
+        return data;
+    }
+
+    let colIndex = { // Similar to itmCol, eventually stores column names.
+        doc: "DOCUMENT #",
+        op: "OP IN CHARGE",
+        status: "STATUS",
+        memo: "MEMO",
+        flags: "MAJOR FLAGS",
         set: false
     };
 
@@ -63,99 +80,49 @@ if (url.includes("transactionlist")) {
     // Query selector for headers
     // document.querySelector("#div__lab1")
 
-    const getRowCount = () => {
-        let testRows;
-        let lastRow = 0;
-        let y = 0;
-        testRows = document.querySelector("#row0 > td:nth-child(6)");
-        // The lines are written differently in edit mode, so we'll need to account for this while counting rows
-        while (testRows) {
-            lastRow = y;
-            testRows = document.querySelector(`#row${y} > td:nth-child(6)`);
-            y++;
-        }
-        debug(`There are ${lastRow} rows`);
-        // Rows are 0-indexed so subtract one
-        return lastRow - 1;
-    }
-
-    const getColumnCount = () => {
-        let testColumns;
-        let lastColumn = 0;
-        let x = 1;
-        testColumns = document.querySelector("#row0 > td:nth-child(1)");
-        while (testColumns) {
-            lastColumn = x - 1;
-            testColumns = document.querySelector(`#row0 > td:nth-child(${x})`);
-            x++;
-        }
-        debug(`There are ${lastColumn} columns`);
-        return lastColumn;
-    }
-
-    const buildOrdersTable = () => {
-        const ordersTable = [];
-        const totalRows = getRowCount();
-        const totalColumns = getColumnCount();
-        let currentRow = [];
-        let row = 0;
-        let column = 1;
-        let aRow;
-        let headerText;
-        while (row <= totalRows) {
-            currentRow = [];
-            while (column <= totalColumns) {
-                aRow = document.querySelector(`#row${row} > td:nth-child(${column})`);
-                currentRow.push(aRow);
-                if (colIndex.set == false) {
-                    headerText = document.querySelector(`#div__lab${column}`).textContent.toUpperCase();
-                    debug(headerText);
-                    switch (true) {
-                        case headerText.includes("DOCUMENT"):
-                            colIndex.doc = column - 1;
-                            break;
-                        case headerText.includes("OP IN CHARGE"):
-                            colIndex.op = column - 1;
-                            break;
-                        case headerText.includes("STATUS"):
-                            colIndex.status = column - 1;
-                            break;
-                        case headerText.includes("MEMO"):
-                            colIndex.memo = column - 1;
-                            break;
-                        case headerText.includes("MAJOR FLAGS"):
-                            colIndex.flags = column - 1;
-                            break;
-                    }
+    // Build an array out of the table
+    const buildOrdersTable = () => { // Truthfully this is basically redundant but it neatly encapsulates the index setting process
+        const orderTable = captureTableData(document.querySelector("#div__body"));
+        // Make sure headers are in uppercase (NS inconsistently uses sentence case)
+        orderTable[0] = orderTable[0].map(header => header.innerText.toUpperCase().trim());
+        if (!colIndex.set) {
+            for (key in colIndex) {
+                const hdrIndex = orderTable[0].indexOf(colIndex[key]);
+                if (hdrIndex != -1) {
+                    colIndex[key] = hdrIndex;
+                } else if (key != "set") {
+                    console.log(`Header ${key} not found`)
                 }
-                column++;
-            };
-            colIndex.set = true;
-            column = 1;
-            ordersTable.push(currentRow);
-            row++;
-        };
-        debug(colIndex);
-        return ordersTable;
+                colIndex.set = true;
+            }
+        }
+
+        return orderTable;
     }
 
     // Flag totals will be set only for orders with (any) OP (change this?)
+    // defOrder property will determine default order in sorting list (can be changed by dragging list items, but will reset on refresh)
     let flagTotals = {
-        flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "LOA Needed", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
-        "Fraud Review": 0,
-        "Comment": 0,
-        "Tax Exempt": 0,
-        "Address Validation": 0,
-        "Sales Rep": 0,
-        "LOA Needed": 0,
-        "Low Gross Profit": 0,
-        "$0 Order": 0,
-        "Outside US48": 0,
-        "None": 0,
-        "All": 0
+        "Fraud Review": { count: 0, text: "Fraud Review:", liid: "lifraud", defOrder: 10, btnText: "Open Fraud Orders" },
+        "Comment": { count: 0, text: "Comment", liid: "licmt", defOrder: 1, btnText: "Open Comments" },
+        "Tax Exempt": { count: 0, text: "Tax Exempt", liid: "litax", defOrder: 2, btnText: "Open Tax Exempts" },
+        "Address Validation": { count: 0, text: "Address Validation", liid: "liadd", defOrder: 3, btnText: "Open Address Validation" },
+        "Sales Rep": { count: 0, text: "Sales Rep:", liid: "lisr", defOrder: 4, btnText: "Open Sales Rep" },
+        "LOA Needed": { count: 0, text: "LOA Needed", liid: "liloa", defOrder: 5, btnText: "Open LOA Needed" },
+        "Low Gross Profit": { count: 0, text: "Low Gross Profit", liid: "lilgr", defOrder: 6, btnText: "Open Low Gross Profit" },
+        "$0 Order": { count: 0, text: "$0 Order", liid: "lizer", defOrder: 7, btnText: "Open $0 Orders" },
+        "Outside US48": { count: 0, text: "Outside the US48", liid: "lius48", defOrder: 8, btnText: "Open !US48s" },
+        "None": { count: 0, text: " \n", liid: "linon", defOrder: 9, btnText: "Open No Flags" },
+        "Other": { count: 0, text: "Other", liid: "lioth", defOrder: 11, btnText: "Open Other Flags" },
+        "All": { count: 0, text: "ThisistheAllType", liid: "liall", defOrder: 12, btnText: "Open All Assigned" },
+        reset() {
+            for (flag in this) {
+                this[flag].count = 0;
+            }
+        }
     }
 
-    const readOrders = () => {
+    const readOrders = () => { // Defines a class for Orders and then stores order info based on the generated table
         function Order() {
             this.so = "";
             this.url = "";
@@ -165,22 +132,14 @@ if (url.includes("transactionlist")) {
                 text: "",
                 types: [],
                 setFlagTypes: function () {
-                    if (this.text.includes("Fraud Review:")) { this.types.push("Fraud Review") };
-                    if (this.text.includes("Address Validation")) { this.types.push("Address Validation") };
-                    if (this.text.includes("Sales Rep:")) { this.types.push("Sales Rep") };
-                    if (this.text.includes("Large Order Approval")) { this.types.push("LOA Needed") };
-                    if (this.text.includes("Customer Comment:")) { this.types.push("Comment") };
-                    if (this.text.includes("Tax Exempt Review")) { this.types.push("Tax Exempt") };
-                    if (this.text.includes("Low Gross Profit")) { this.types.push("Low Gross Profit") };
-                    if (this.text.includes("$0 Order")) { this.types.push("$0 Order") };
-                    if (this.text.includes("Outside the US48")) { this.types.push("Outside US48") };
-                    if (this.text == ' \n') { this.types.push("None") };
-                },
-                getCommentType: function () {
-                    let cmntType = "";
-                    if (this.types.includes("Comment")) {
-                        return cmntType;
-                    } else { debug("Type is not comment or no comment found") }
+                    for (let key in flagTotals) {
+                        if (this.text.includes(flagTotals[key].text)) {
+                            this.types.push(key);
+                        }
+                    }
+                    if (this.types.length == 0) {
+                        this.types.push("Other");
+                    }
                 }
             }
         }
@@ -248,29 +207,16 @@ if (url.includes("transactionlist")) {
     const countOrders = () => {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const curTable = readOrders();
-        flagTotals = {
-            flagTypes: ["Fraud Review", "Comment", "Tax Exempt", "Address Validation", "Sales Rep", "LOA Needed", "Low Gross Profit", "$0 Order", "Outside US48", "None"],
-            "Fraud Review": 0,
-            "Comment": 0,
-            "Tax Exempt": 0,
-            "Address Validation": 0,
-            "Sales Rep": 0,
-            "LOA Needed": 0,
-            "Low Gross Profit": 0,
-            "$0 Order": 0,
-            "Outside US48": 0,
-            "None": 0,
-            "All": 0
-        }
+        flagTotals.reset(); // We're resetting the flagTotals each time to make sure the count is up to date.
         for (let i = 0; i <= curTable.length - 1; i++) {
             if (curTable[i].op == userName) {
                 curTable[i].flags.types.forEach((flag) => {
-                    flagTotals[flag]++
+                    flagTotals[flag].count++
                 });
-                flagTotals["All"]++
+                flagTotals["All"].count++;
             }
         }
-        console.log(flagTotals);
+        debug(flagTotals);
     }
 
 
@@ -312,6 +258,23 @@ if (url.includes("transactionlist")) {
         btnContainer.style.top = "54px";
         btnContainer.style.left = "30px";
         // Finish container
+        const otherBtnContainer = document.createElement("div");
+        otherBtnContainer.style.backgroundColor = "#f0f8ff";
+        otherBtnContainer.style.display = "inline-flex";
+        otherBtnContainer.style.padding = "10px";
+        otherBtnContainer.style.border = "2px solid #7595cc";
+        otherBtnContainer.id = "otherbtns";
+        const collapseOtherBtns = document.createElement("button");
+        collapseOtherBtns.innerHTML = ">";
+        collapseOtherBtns.style.backgroundColor = "#b2d3ef";
+        collapseOtherBtns.style.marginLeft = "10px";
+        collapseOtherBtns.style.border = "2px solid #4f5c7b";
+        collapseOtherBtns.style.height = "42px";
+        collapseOtherBtns.style.alignSelf = "center";
+        collapseOtherBtns.onclick = () => {
+            otherBtnContainer.style.display = otherBtnContainer.style.display === "none" ? "inline-flex" : "none";
+            collapseOtherBtns.innerHTML = otherBtnContainer.style.display === "none" ? "^" : ">";
+        };
         // Make table to check flags for
         const flagTable = readOrders();
         const flagList = [];
@@ -327,11 +290,12 @@ if (url.includes("transactionlist")) {
         debug(flagList);
 
         // Function to create list items for sorting list
-        function createListItem(text, id, scope) {
+        function createListItem(text, id, scope, defaultNum) {
             const li = document.createElement("li");
             li.flagType = scope;
             li.innerHTML = text;
             li.id = id;
+            li.defOrder = defaultNum;
             li.style.listStyleType = "decimal";
             li.style.border = "1px solid black";
             li.style.borderRadius = "10px";
@@ -348,19 +312,15 @@ if (url.includes("transactionlist")) {
             return li;
         }
 
-        const liFraud = createListItem("Fraud Review", "lifraud", "Fraud Review");
-        const liCmt = createListItem("Comment", "licmt", "Comment");
-        const liTax = createListItem("Tax Exempt", "litax", "Tax Exempt");
-        const liAdd = createListItem("Address Validation", "liadd", "Address Validation");
-        const liSR = createListItem("Sales Rep", "lisr", "Sales Rep");
-        const liLOA = createListItem("LOA Needed", "liloa", "LOA Needed");
-        const liLGR = createListItem("Low Gross Profit", "lilgr", "Low Gross Profit");
-        const liZer = createListItem("$0 Order", "lizer", "$0 Order");
-        const liUS48 = createListItem("Outside US48", "lius48", "Outside US48");
-        const liNon = createListItem("None", "linon", "None");
-
         // The order here will determine default order
-        allLis = [liCmt, liSR, liLOA, liAdd, liTax, liLGR, liZer, liUS48, liNon, liFraud];
+        allLis = [];
+        for (let key in flagTotals) {
+            if (key != "reset" && key != "All") {
+                const li = createListItem(key, flagTotals[key].liid, key, flagTotals[key].defOrder);
+                allLis.push(li);
+            }
+        }
+        allLis.sort((a, b) => a.defOrder - b.defOrder);
 
         allLis.forEach((listem) => {
             selectorUL.appendChild(listem);
@@ -373,7 +333,7 @@ if (url.includes("transactionlist")) {
             btn.textIn = text;
             btn.flagType = scope;
             const countp = document.createElement("p");
-            countp.innerHTML = `${text} (${flagTotals[scope]})`
+            countp.innerHTML = `${text} (${flagTotals[scope].count})`;
             btn.style.backgroundColor = "#b2d3ef";
             btn.style.marginLeft = "10px";
             btn.style.border = "2px solid #4f5c7b";
@@ -391,26 +351,28 @@ if (url.includes("transactionlist")) {
             return btn;
         }
 
+        // TODO: Loop this as with the list items, but will need to add even more properties to flagTotals or create a new object to store button info
         const btnAll = createButton("Open All Assigned", "All");
         // Default behavior is to set display to none if there are no "scope" orders in the list; no orders will be "All"
         btnAll.style.marginLeft = "0px";
-        const btnNon = createButton("Open No Flags", "None");
-        const btnFraud = createButton("Open Fraud Orders", "Fraud Review");
-        const btnCmt = createButton("Open Comments", "Comment");
-        const btnTax = createButton("Open Tax Exempts", "Tax Exempt");
-        const btnAdd = createButton("Open Address Validation", "Address Validation");
-        const btnSal = createButton("Open Sales Rep", "Sales Rep");
-        const btnLOA = createButton("Open LOA Needed", "LOA Needed");
-        const btnLGP = createButton("Open Low Gross Profit", "Low Gross Profit");
-        const btnZer = createButton("Open $0 Orders", "$0 Order");
-        const btnUS48 = createButton("Open !US48s", "Outside US48");
-        allBtns = [btnAll, btnNon, btnFraud, btnCmt, btnTax, btnAdd, btnSal, btnLOA, btnLGP, btnZer, btnUS48]
-        btnContainer.appendChild(selector);
-        btnContainer.id = "btncontrol";
+        btnAll.style.marginRight = "6px";
+        allBtns = [];
+        for (let key in flagTotals) {
+            if (key != "reset" && key != "All") {
+                allBtns.push(createButton(flagTotals[key].btnText, key));
+            }
+        }
         allBtns.forEach((button) => {
-            btnContainer.appendChild(button);
+            otherBtnContainer.appendChild(button);
             addListeners(button);
-        })
+        });
+        btnContainer.id = "btncontrol";
+        btnContainer.appendChild(selector);
+        btnContainer.appendChild(btnAll); // Append this button separately since we don't want it to collapse
+        addListeners(btnAll);
+        btnContainer.appendChild(collapseOtherBtns);
+        addListeners(collapseOtherBtns);
+        btnContainer.appendChild(otherBtnContainer);
         // document.querySelector("#body > div > div.uir-page-title-firstline > h1").insertAdjacentElement('afterend', btnContainer);
         document.querySelector("#body > div.uir-page-title.uir-page-title-list.uir-list-title.noprint").insertAdjacentElement('afterend', btnContainer);
         const list = document.querySelector("#flaglist");
@@ -433,16 +395,16 @@ if (url.includes("transactionlist")) {
                 if (mutation.type === "attributes" && mutation.attributeName === "data-tooltip-enabled") {
                     // call readOrders(), determine how many of each type are in OP name? Update color and add count to buttons?
                     // allBtns should be an array which still contains the button objects
-                    console.log(`The ${mutation.attributeName} attribute was modified.`);
-                    console.log(mutation);
-                    console.log(allBtns);
+                    debug(`The ${mutation.attributeName} attribute was modified.`);
+                    debug(mutation);
+                    debug(allBtns);
                     setTimeout(() => {
                         countOrders();
                         allBtns.forEach((button) => {
-                            button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType]})</p>`;
+                            button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType].count})</p>`;
                         })
                         allLis.forEach((listem) => {
-                            if (flagTotals[listem.flagType] > 0) {
+                            if (flagTotals[listem.flagType].count > 0) {
                                 listem.style.display = "list-item";
                             } else { listem.style.display = "none" };
                         })
@@ -581,8 +543,12 @@ const formatCopyButton = (btn) => {
 const createCopyTable = () => {
     const copyTable = document.createElement("div");
     copyTable.style.display = "inline-block";
+    // NetSuite 2.1 broke the original placement so this will have to do for now
+    copyTable.style.position = "absolute";
+    copyTable.style.left = "-13em";
     copyTable.innerHTML = `<table style="text-align: center; width: 2em; display: inline-block;"><thead><tr><th colspan="2" style="border: 1px solid black; background-color: #bdbdbd; text-align: center;">Copy To:</th></tr></thead><tbody><tr><td class="button" id="delbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;cursor: pointer;user-select: none;">Delivery Instructions</td><td class="button" id="prodbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;height: 86px;cursor: pointer;user-select: none;">Production Memo</td></tr><tr><td class="status" id="delrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td><td class="status" id="prodrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td></tr></tbody></table>`;
-    document.querySelector("#custbody_customer_order_comments").after(copyTable);
+    // document.querySelector("#custbody_customer_order_comments").after(copyTable);
+    document.querySelector("#custbody_customer_order_comments_fs > div > div.uir-resizable-element-resizer").after(copyTable);
     const awaitTable = VM.observe(document.body, () => {
         // Find the target node
         const node = document.querySelector("#delbtn");
@@ -963,8 +929,10 @@ const lookForScrollBars = (mutationList, observer) => {
 const copyNoteButton = () => {
     try {
         console.log("Copying button...")
-        const oldNote = document.querySelector("#newhist");
+        // const oldNote = document.querySelector("#newhist");
+        const oldNote = document.querySelector("[data-nsps-label='New Note']");
         const newNote = oldNote.cloneNode(true);
+        newNote.style.height = "stretch";
         noteButton = document.createElement("div");
         noteButton.style.backgroundColor = "#ededdb";
         noteButton.style.border = "1px solid black";
