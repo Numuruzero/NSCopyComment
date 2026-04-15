@@ -5,9 +5,11 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSToolBox.user.js
+// @grant       GM.setValue
+// @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.5
+// @version     1.51
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -102,25 +104,38 @@ if (url.includes("transactionlist")) {
 
     // Flag totals will be set only for orders with (any) OP (change this?)
     // defOrder property will determine default order in sorting list (can be changed by dragging list items, but will reset on refresh)
+    // Text property is what the script looks for in the "Major Flags" column to determine if an order has that flag
     let flagTotals = {
-        "Fraud Review": { count: 0, text: "Fraud Review:", liid: "lifraud", defOrder: 10, btnText: "Open Fraud Orders" },
+        "All": { count: 0, text: "ThisistheAllType", liid: "liall", defOrder: 0, btnText: "Open All Assigned" },
         "Comment": { count: 0, text: "Comment", liid: "licmt", defOrder: 1, btnText: "Open Comments" },
         "Tax Exempt": { count: 0, text: "Tax Exempt", liid: "litax", defOrder: 2, btnText: "Open Tax Exempts" },
-        "Address Validation": { count: 0, text: "Address Validation", liid: "liadd", defOrder: 3, btnText: "Open Address Validation" },
-        "Sales Rep": { count: 0, text: "Sales Rep:", liid: "lisr", defOrder: 4, btnText: "Open Sales Rep" },
-        "LOA Needed": { count: 0, text: "LOA Needed", liid: "liloa", defOrder: 5, btnText: "Open LOA Needed" },
+        "$0 Order": { count: 0, text: "$0 Order", liid: "lizer", defOrder: 3, btnText: "Open $0 Orders" },
+        "Address Validation": { count: 0, text: "Address Validation", liid: "liadd", defOrder: 4, btnText: "Open Address Validation" },
+        "Short Address": { count: 0, text: "Address Line 1", liid: "lishort", defOrder: 5, btnText: "Open Short Address" },
         "Low Gross Profit": { count: 0, text: "Low Gross Profit", liid: "lilgr", defOrder: 6, btnText: "Open Low Gross Profit" },
-        "$0 Order": { count: 0, text: "$0 Order", liid: "lizer", defOrder: 7, btnText: "Open $0 Orders" },
-        "Outside US48": { count: 0, text: "Outside the US48", liid: "lius48", defOrder: 8, btnText: "Open !US48s" },
-        "None": { count: 0, text: " \n", liid: "linon", defOrder: 9, btnText: "Open No Flags" },
+        "Sales Rep": { count: 0, text: "Sales Rep:", liid: "lisr", defOrder: 7, btnText: "Open Sales Rep" },
+        "LOA Needed": { count: 0, text: "(LOA) Needed", liid: "liloa", defOrder: 8, btnText: "Open LOA Needed" },
+        "Outside US48": { count: 0, text: "Outside the US48", liid: "lius48", defOrder: 9, btnText: "Open !US48s" },
+        "None": { count: 0, text: " \n", liid: "linon", defOrder: 10, btnText: "Open No Flags" },
         "Other": { count: 0, text: "Other", liid: "lioth", defOrder: 11, btnText: "Open Other Flags" },
-        "All": { count: 0, text: "ThisistheAllType", liid: "liall", defOrder: 12, btnText: "Open All Assigned" },
+        "Fraud Review": { count: 0, text: "Fraud Review:", liid: "lifraud", defOrder: 12, btnText: "Open Fraud Orders" },
         reset() {
             for (flag in this) {
                 this[flag].count = 0;
             }
         }
     }
+
+    // GM_setValue("flagTotals", JSON.stringify(flagTotals)); // This is used to store the flag totals for access across functions, since some are called by event listeners
+    // console.log(GM_getValue("flagTotals"));
+    // (async () => {
+    //     // Storing a value
+    //     await GM.setValue("flagTotals", JSON.stringify(flagTotals));
+
+    //     // Retrieving the value later
+    //     const name = await GM.getValue("flagTotals");
+    //     console.log(name); // Output: ScriptCatUser
+    // })();
 
     const readOrders = () => { // Defines a class for Orders and then stores order info based on the generated table
         function Order() {
@@ -238,7 +253,9 @@ if (url.includes("transactionlist")) {
         }, listenOptions);
     }
 
+    // Global variables for manipulation across functions
     let allBtns;
+    let btnAll;
     let allLis;
 
     const makeButtons = () => {
@@ -261,6 +278,9 @@ if (url.includes("transactionlist")) {
         const otherBtnContainer = document.createElement("div");
         otherBtnContainer.style.backgroundColor = "#f0f8ff";
         otherBtnContainer.style.display = "inline-flex";
+        otherBtnContainer.style.flexWrap = "wrap";
+        otherBtnContainer.style.maxWidth = "90vw";
+        otherBtnContainer.style.justifyContent = "center";
         otherBtnContainer.style.padding = "10px";
         otherBtnContainer.style.border = "2px solid #7595cc";
         otherBtnContainer.id = "otherbtns";
@@ -351,8 +371,7 @@ if (url.includes("transactionlist")) {
             return btn;
         }
 
-        // TODO: Loop this as with the list items, but will need to add even more properties to flagTotals or create a new object to store button info
-        const btnAll = createButton("Open All Assigned", "All");
+        btnAll = createButton("Open All Assigned", "All");
         // Default behavior is to set display to none if there are no "scope" orders in the list; no orders will be "All"
         btnAll.style.marginLeft = "0px";
         btnAll.style.marginRight = "6px";
@@ -403,6 +422,7 @@ if (url.includes("transactionlist")) {
                         allBtns.forEach((button) => {
                             button.innerHTML = `<p>${button.textIn} (${flagTotals[button.flagType].count})</p>`;
                         })
+                        btnAll.innerHTML = `<p>Open All Assigned (${flagTotals["All"].count})</p>`; // This is not within allBtns for the sake of separation
                         allLis.forEach((listem) => {
                             if (flagTotals[listem.flagType].count > 0) {
                                 listem.style.display = "list-item";
@@ -544,8 +564,11 @@ const createCopyTable = () => {
     const copyTable = document.createElement("div");
     copyTable.style.display = "inline-block";
     // NetSuite 2.1 broke the original placement so this will have to do for now
-    copyTable.style.position = "absolute";
-    copyTable.style.left = "-13em";
+    // copyTable.style.position = "absolute";
+    // copyTable.style.left = "-13em";
+    copyTable.style.position = "relative";
+    copyTable.style.right = "-22em";
+    copyTable.style.marginTop = "-10em";
     copyTable.innerHTML = `<table style="text-align: center; width: 2em; display: inline-block;"><thead><tr><th colspan="2" style="border: 1px solid black; background-color: #bdbdbd; text-align: center;">Copy To:</th></tr></thead><tbody><tr><td class="button" id="delbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;cursor: pointer;user-select: none;">Delivery Instructions</td><td class="button" id="prodbtn" style="border: 1px solid #508595; padding: 6px 3px; background-color: #e4eaf5; text-wrap: auto;height: 86px;cursor: pointer;user-select: none;">Production Memo</td></tr><tr><td class="status" id="delrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td><td class="status" id="prodrdy" style="border: 1px solid #508595; background-color: #f8f892;">Ready</td></tr></tbody></table>`;
     // document.querySelector("#custbody_customer_order_comments").after(copyTable);
     document.querySelector("#custbody_customer_order_comments_fs > div > div.uir-resizable-element-resizer").after(copyTable);
@@ -916,9 +939,14 @@ const sbarConfig = { attributes: true, childList: false, subtree: true, attribut
 const lookForScrollBars = (mutationList, observer) => {
     mutationList.forEach((mutation) => {
         // console.log(mutation);
-        if (mutation.oldValue?.includes('scroll hidden')) {
-            const target = mutation.target;
-            target.style.overflow = 'hidden';
+        // document.querySelector("#item_layer > div > div > div.uir-machine-floating-scrollbar")
+        // if (mutation.oldValue?.includes('scroll hidden')) {
+        //     const target = mutation.target;
+        //     target.style.overflow = 'hidden';
+        //     console.log("Removed extra scroll bar");
+        // }
+        if (mutation.target.className == "uir-machine-floating-scrollbar" && mutation.target.style.overflow != 'hidden') {
+            mutation.target.style.overflow = 'hidden';
             console.log("Removed extra scroll bar");
         }
     });
