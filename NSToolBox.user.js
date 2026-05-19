@@ -9,15 +9,17 @@
 // @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.51
+// @version     1.54
 // ==/UserScript==
 
 /*jshint esversion: 6 */
 
 // Declare const to determine if document is in edit mode
 const edCheck = new RegExp('e=T');
+const pcsCheck = new RegExp('pcs=T');
 const url = window.location.href;
 const isEd = edCheck.test(url);
+const isPcs = pcsCheck.test(url);
 
 // Determine if record is estimate
 const estCheck = new RegExp(/estimate\.nl/);
@@ -107,18 +109,20 @@ if (url.includes("transactionlist")) {
     // Text property is what the script looks for in the "Major Flags" column to determine if an order has that flag
     let flagTotals = {
         "All": { count: 0, text: "ThisistheAllType", liid: "liall", defOrder: 0, btnText: "Open All Assigned" },
-        "Comment": { count: 0, text: "Comment", liid: "licmt", defOrder: 1, btnText: "Open Comments" },
-        "Tax Exempt": { count: 0, text: "Tax Exempt", liid: "litax", defOrder: 2, btnText: "Open Tax Exempts" },
-        "$0 Order": { count: 0, text: "$0 Order", liid: "lizer", defOrder: 3, btnText: "Open $0 Orders" },
-        "Address Validation": { count: 0, text: "Address Validation", liid: "liadd", defOrder: 4, btnText: "Open Address Validation" },
-        "Short Address": { count: 0, text: "Address Line 1", liid: "lishort", defOrder: 5, btnText: "Open Short Address" },
-        "Low Gross Profit": { count: 0, text: "Low Gross Profit", liid: "lilgr", defOrder: 6, btnText: "Open Low Gross Profit" },
-        "Sales Rep": { count: 0, text: "Sales Rep:", liid: "lisr", defOrder: 7, btnText: "Open Sales Rep" },
-        "LOA Needed": { count: 0, text: "(LOA) Needed", liid: "liloa", defOrder: 8, btnText: "Open LOA Needed" },
-        "Outside US48": { count: 0, text: "Outside the US48", liid: "lius48", defOrder: 9, btnText: "Open !US48s" },
-        "None": { count: 0, text: " \n", liid: "linon", defOrder: 10, btnText: "Open No Flags" },
-        "Other": { count: 0, text: "Other", liid: "lioth", defOrder: 11, btnText: "Open Other Flags" },
-        "Fraud Review": { count: 0, text: "Fraud Review:", liid: "lifraud", defOrder: 12, btnText: "Open Fraud Orders" },
+        "Expedited": { count: 0, text: "Expedited", liid: "liexp", defOrder: 1, btnText: "Open Expedited Orders" },
+        "Comment": { count: 0, text: "Comment", liid: "licmt", defOrder: 2, btnText: "Open Comments" },
+        "Tax Exempt": { count: 0, text: "Tax Exempt", liid: "litax", defOrder: 3, btnText: "Open Tax Exempts" },
+        "Shipquote Failed": { count: 0, text: "Shipquote Failed", liid: "lishipf", defOrder: 4, btnText: "Open Shipquote Failed" },
+        "Sales Rep": { count: 0, text: "Sales Rep:", liid: "lisr", defOrder: 5, btnText: "Open Sales Rep" },
+        "$0 Order": { count: 0, text: "$0 Order", liid: "lizer", defOrder: 6, btnText: "Open $0 Orders" },
+        "Address Validation": { count: 0, text: "Address Validation", liid: "liadd", defOrder: 7, btnText: "Open Address Validation" },
+        "Short Address": { count: 0, text: "Address Line 1", liid: "lishort", defOrder: 8, btnText: "Open Short Address" },
+        "Low Gross Profit": { count: 0, text: "Low Gross Profit", liid: "lilgr", defOrder: 9, btnText: "Open Low Gross Profit" },
+        "LOA Needed": { count: 0, text: "(LOA) Needed", liid: "liloa", defOrder: 10, btnText: "Open LOA Needed" },
+        "Outside US48": { count: 0, text: "Outside the US48", liid: "lius48", defOrder: 11, btnText: "Open !US48s" },
+        "None": { count: 0, text: " \n", liid: "linon", defOrder: 12, btnText: "Open No Flags" },
+        "Other": { count: 0, text: "Other", liid: "lioth", defOrder: 13, btnText: "Open Other Flags" },
+        "Fraud Review": { count: 0, text: "Fraud Review:", liid: "lifraud", defOrder: 14, btnText: "Open Fraud Orders" },
         reset() {
             for (flag in this) {
                 this[flag].count = 0;
@@ -190,6 +194,7 @@ if (url.includes("transactionlist")) {
         const userName = document.querySelectorAll('[aria-label="Change Role"]')[0].lastElementChild.lastElementChild.firstElementChild.innerText;
         const tableState = readOrders();
         const flagOrder = [];
+        // Get the list of flags currently selected with Username as evidenced by the sort list
         document.querySelector("#flaglist").childNodes.forEach((node) => {
             flagOrder.push(node.flagType);
         });
@@ -197,15 +202,23 @@ if (url.includes("transactionlist")) {
         const orderURLs = [];
         switch (scope) {
             case "All":
-                // Foreach flag types, loop through orders
-                flagOrder.forEach((type) => {
+                // Foreach flag types, loop through all orders
+                console.log(tableState);
+                // Reverse the flag order
+                flagOrder.reverse().forEach((type) => {
                     for (let j = 0; j <= tableState.length - 1; j++) {
-                        if (tableState[j].op == userName && tableState[j].flags.types[0] == type) {
+                        // We're only looking for the first flag, since we might otherwise open an order multiple times?
+                        // Idea: reverse the order of the flagOrder, find if they are included in the flag list at all and remove from tablestate, then reverse orderURLs so the "worst" flags are always pushed out last
+                        if (tableState[j].op == userName && tableState[j].flags.types.includes(type)) {
                             orderURLs.push(tableState[j].url);
+                            tableState.splice(j, 1);
+                            j--;
                         }
                     };
                 })
+                orderURLs.reverse(); // This is to make sure the "worst" flags are opened first, since they're pushed last
                 break;
+            // Otherwise, just loop through orders and open ones that match the selected scope
             default:
                 for (let i = 0; i <= tableState.length - 1; i++) {
                     if (tableState[i].op == userName && tableState[i].flags.types.includes(scope)) {
@@ -276,10 +289,10 @@ if (url.includes("transactionlist")) {
         btnContainer.style.left = "30px";
         // Finish container
         const otherBtnContainer = document.createElement("div");
-        otherBtnContainer.style.backgroundColor = "#f0f8ff";
+        otherBtnContainer.style.backgroundColor = "#bbd9f3";
         otherBtnContainer.style.display = "inline-flex";
         otherBtnContainer.style.flexWrap = "wrap";
-        otherBtnContainer.style.maxWidth = "90vw";
+        otherBtnContainer.style.maxWidth = "79vw";
         otherBtnContainer.style.justifyContent = "center";
         otherBtnContainer.style.padding = "10px";
         otherBtnContainer.style.border = "2px solid #7595cc";
@@ -465,6 +478,171 @@ if (url.includes("transactionlist")) {
 }
 ////////////////////////////////////END TRANSACTION/SEARCH SCRIPTS/////////////////////////////////////
 ////////////////////////////////BEGIN SALES ORDER AND ESTIMATE SCRIPTS////////////////////////////////
+/////////////////////////////////////BEGIN EXPEDITED GP BUTTONS//////////////////////////////////////
+// Simple recursive helper to convert XML nodes to a JSON object
+function xmlToObj(node) {
+    let obj = {};
+
+    for (let child of node.children) {
+        if (child.children.length > 0) {
+            if (child?.attributes?.name) {
+                obj[child.attributes.name.value] = xmlToObj(child);
+                continue; // Skip the default nodeName assignment for named nodes
+            }
+            if (obj[child.nodeName]) {
+                // If we've already seen this nodeName, we need to convert it to an array (if it isn't one already) and push the new value
+                if (!Array.isArray(obj[child.nodeName])) {
+                    obj[child.nodeName] = [obj[child.nodeName]];
+                }
+                obj[child.nodeName].push(xmlToObj(child));
+            } else {
+                obj[child.nodeName] = xmlToObj(child);
+            }
+        } else {
+            // We're assuming there are no terminating nodes with repeated names
+            if (child?.attributes?.name) {
+                obj[child.attributes.name.value] = child.textContent;
+                continue; // Skip the default nodeName assignment for named nodes
+            }
+            obj[child.nodeName] = child.textContent;
+        }
+    }
+    return obj;
+}
+
+async function grabXMLasJSON(url) {
+    try {
+        const response = await fetch(`${url}&xml=T`);
+        const data = await response.text();
+        const parser = new DOMParser();
+
+        const parsedDoc = parser.parseFromString(data, "text/xml");
+        return xmlToObj(parsedDoc.documentElement);
+    } catch (error) {
+        console.error("Error fetching or parsing XML:", error);
+    }
+}
+
+async function displayExpGPInfo() {
+    // Gather GP info for expedited shipments
+    const getStandardOvernight = new RegExp('Service: FedEx Standard Overnight®, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
+    const getPriorityOvernight = new RegExp('Service: FedEx Priority Overnight®, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
+    const getTwoDay = new RegExp('Service: FedEx 2Day®, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
+    const getTwoDayAM = new RegExp('Service: FedEx 2Day® AM, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
+    const cleanTags = new RegExp('</*(?:u|b)>', 'g');
+    const gpurl = document.querySelector("#custbody_gp_quickview_fs_lbl_uir_label").nextElementSibling.childNodes[1].attributes.onclick.nodeValue.match(/htt.*\d+ /g)[0].trim();
+    const shipurl = document.querySelector("#custbody_shipquote_val > a").href;
+    const expGPInfo = await grabXMLasJSON(gpurl);
+    const orderAmount = Number(expGPInfo.record.custrecord_gp_so_amount);
+    const poCosts = Number(expGPInfo.record.custrecord_gp_est_po);
+    const stockCosts = Number(expGPInfo.record.custrecord_gp_est_item);
+    const shipCosts = Number(expGPInfo.record.custrecord_gp_est_ship);
+
+    const shipInfo = await grabXMLasJSON(shipurl);
+    const parcelInfo = shipInfo.record.custrecord_sq_quoted_parcel_rates.replaceAll(cleanTags, '');
+    // Ship quote info
+    const standardOvernight = parcelInfo.match(getStandardOvernight)?.[1] || "Not Found";
+    const priorityOvernight = parcelInfo.match(getPriorityOvernight)?.[1] || "Not Found";
+    const twoDay = parcelInfo.match(getTwoDay)?.[1] || "Not Found";
+    const twoDayAM = parcelInfo.match(getTwoDayAM)?.[1] || "Not Found";
+    const cstCost = document.querySelector("#shippingcost_fs_lbl_uir_label").nextElementSibling.textContent.trim();
+
+    const marginNow = (orderAmount - poCosts - stockCosts - cstCost) / orderAmount;
+    const marginWithTwoDay = twoDay === "Not Found" ? undefined : (orderAmount - poCosts - stockCosts - twoDay) / orderAmount;
+    const marginWithOvernight = standardOvernight === "Not Found" ? undefined : (orderAmount - poCosts - stockCosts - standardOvernight) / orderAmount;
+    const marginWithPriorityOvernight = priorityOvernight === "Not Found" ? undefined : (orderAmount - poCosts - stockCosts - priorityOvernight) / orderAmount;
+    const marginWithTwoDayAM = twoDayAM === "Not Found" ? undefined : (orderAmount - poCosts - stockCosts - twoDayAM) / orderAmount;
+
+    // console.log(expGPInfo);
+    // console.log(`Order Amount: ${orderAmount}, PO Costs: ${poCosts}, Stock Costs: ${stockCosts}, Ship Costs: ${shipCosts}`);
+    // console.log(shipInfo);
+    // console.log(parcelInfo);
+    // console.log(`Standard Overnight: ${standardOvernight}, Priority Overnight: ${priorityOvernight}, 2Day: ${twoDay}, 2Day AM: ${twoDayAM}`);
+
+    // Now we have all the info, let's insert it into the page in a new row under the GP quick view link
+    const gpTr = document.querySelector("#custbody_gp_quickview_fs_lbl_uir_label").parentElement.parentElement.parentElement;
+    const quoteTr = document.createElement("tr");
+    quoteTr.class = "uir-field-wrapper-cell";
+    quoteTr.id = "cust_shipgp_info";
+    quoteTr.quote = {};
+    quoteTr.quote.twoDay = twoDay;
+    quoteTr.quote.twoDayAM = twoDayAM;
+    quoteTr.quote.priorityOvernight = priorityOvernight;
+    quoteTr.quote.standardOvernight = standardOvernight;
+    quoteTr.gp = {};
+    quoteTr.gp.orderAmount = orderAmount;
+    quoteTr.gp.poCosts = poCosts;
+    quoteTr.gp.stockCosts = stockCosts;
+    quoteTr.gp.shipCosts = shipCosts;
+    const twoDayButton = document.createElement("button");
+    twoDayButton.textContent = "Copy 2Day";
+    twoDayButton.onclick = () => {
+        preventDefault();
+        stopPropagation();
+        const date = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+        const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" });
+        const so = document.querySelector("[class='uir-record-id']").textContent.trim();
+        const twoDayInfo = `${date}	${time}	${so}	Two-Day	${cstCost}	${twoDay}	${(marginNow * 100).toFixed(2)}%	${(marginWithTwoDay * 100).toFixed(2)}%	No Action	${marginWithTwoDayAM ? `Quoted 2Day. 2DayAM $${twoDayAM} / ${(marginWithTwoDayAM * 100).toFixed(2)}%` : ""}`;
+        navigator.clipboard.writeText(twoDayInfo).then(() => {
+            // alert(`Copied 2Day rate of $${twoDay} to clipboard!`);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
+    };
+    const oneDayButton = document.createElement("button");
+    oneDayButton.textContent = "Copy OneDay";
+    oneDayButton.onclick = () => {
+        preventDefault();
+        stopPropagation();
+        const date = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+        const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" });
+        const so = document.querySelector("[class='uir-record-id']").textContent.trim();
+        const oneDayInfo = `${date}	${time}	${so}	One-Day	${cstCost}	${standardOvernight}	${(marginNow * 100).toFixed(2)}%	${(marginWithOvernight * 100).toFixed(2)}%	No Action	${marginWithPriorityOvernight ? `Quoted Standard Overnight. Priority Overnight $${priorityOvernight} / ${(marginWithPriorityOvernight * 100).toFixed(2)}%` : ""}`;
+        navigator.clipboard.writeText(oneDayInfo).then(() => {
+            // alert(`Copied OneDay rate of $${standardOvernight} to clipboard!`);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
+    };
+    quoteTr.innerHTML = `<td> <div class="uir-field-wrapper uir-long-text" data-nsps-label="Expedited Shipping Quotes" data-nsps-type="field" > <span id="cust_exp_span_span" class="smallgraytextnolink uir-label" data-nsps-type="field_label" ><span id="cust_exp_span" class="uir-label-span smallgraytextnolink" style="" data-nsps-type="label" ><a tabindex="-1" title="What's this?" href='javascript:void("help")' style="cursor: help" class="smallgraytextnolink uir-no-link" onmouseover="setFirstClassName(this, 'smallgraytext'); return true;" onmouseout="setFirstClassName(this, 'smallgraytextnolink'); " >Expedited Shipping Quotes</a > </span></span ><span class="uir-field inputreadonly uir-resizable" data-nsps-type="field_input" data-field-type="textarea"><b>Standard Overnight:</b> $${standardOvernight}<br><b>Priority Overnight:</b> $${priorityOvernight}<br><b>2Day:</b> $${twoDay}<br><b>2Day AM:</b> $${twoDayAM} </span> </div> </td>`;
+
+    gpTr.insertAdjacentElement("afterend", oneDayButton);
+    gpTr.insertAdjacentElement("afterend", twoDayButton);
+    gpTr.insertAdjacentElement("afterend", quoteTr);
+    return expGPInfo;
+}
+////////////////////////////////////////END EXPEDITED GP BUTTONS//////////////////////////////////////
+///////////////////////////////////////BEGIN HIDE UNUSED BUTTONS/////////////////////////////////////
+function hideButtons() {
+    const buttonsToHide = ["#tbl_createdeposit", "#tbl_narrativeButton", "#tbl_custpage_create_checklist"];
+    buttonsToHide.forEach((btn) => {
+        if (document.querySelector(btn)?.parentElement) {
+            document.querySelector(btn).parentElement.style.display = "none";
+        }
+    });
+    // const newAfter = document.querySelector("#e7d-element2 > table > tbody > tr > td:nth-child(3)");
+
+    // const unHideButtonTd = document.createElement("td");
+    // unHideButtonTd.innerHTML = `<table id="tbl_unhide" cellpadding="0" cellspacing="0" border="0" class="uir-button" style="margin-right:6px;" role="presentation"> <tbody><tr id="tr_unhide" class="pgBntG"> <td id="tdleftcap_new"><img src="/images/nav/ns_x.gif" class="bntLT" border="0" height="50%" width="3" alt=""> <img src="/images/nav/ns_x.gif" class="bntLB" border="0" height="50%" width="3" alt=""> </td> <td id="tdbody_unhide" height="20" valign="top" nowrap="" class="bntBgB"> </td> <td id="tdrightcap_unhide"> <img src="/images/nav/ns_x.gif" height="50%" class="bntRT" border="0" width="3" alt=""> <img src="/images/nav/ns_x.gif" height="50%" class="bntRB" border="0" width="3" alt=""> </td> </tr> </tbody></table>`;
+    // const unHideButton = document.createElement("button");
+    // unHideButton.textContent = "Unhide Buttons";
+    // unHideButton.classList.add("bntBgT");
+    // unHideButton.value = "Unhide Buttons";
+    // unHideButton.id = "unhide";
+    // unHideButton.name = "unhide";
+    // unHideButton.onclick = () => {
+    //     preventDefault();
+    //     stopPropagation();
+    //     buttonsToHide.forEach((btn) => {
+    //         if (document.querySelector(btn)?.parentElement) {
+    //             document.querySelector(btn).parentElement.style.display = 'unset';
+    //         }
+    //     });
+    // };
+    // newAfter.insertAdjacentElement("afterend", unHideButtonTd);
+    // document.querySelector("#tdbody_unhide").appendChild(unHideButton);
+}
+/////////////////////////////////////////END HIDE USED BUTTONS////////////////////////////////////////
 ///////////////////////////////BEGIN DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
 
 // Function to resize potentially giant changelogs
@@ -618,7 +796,18 @@ if (isEd) {
 };
 
 ///////////////////////////////END DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
+///////////////////////////////////BEGIN AUTO PROCESSING FUNCTION/////////////////////////////////
+function autoProcess() {
+    if (isEd && isPcs) {
+        console.log("Checking processed")
+        document.querySelector("#custbody_order_processed_fs_inp").click();
+        console.log("Submitting");
+        document.querySelector("#btn_multibutton_submitter").click();
+    }
+}
+////////////////////////////////////END AUTO PROCESSING FUNCTION//////////////////////////////////
 ////////////////////////////////////BEGIN FRAUD INFO COPY BUTTON//////////////////////////////////
+/* Currently unused fraud copy button
 const getFraudInfo = () => {
     if (!document.querySelector("[data-field-name='custbody_kountlink']").innerText.includes("Link")) {
         return;
@@ -648,6 +837,7 @@ const getFraudInfoBtn = () => {
         getFraudInfo();
     });
 }
+    */
 ////////////////////////////////////END FRAUD INFO COPY BUTTON/////////////////////////////////////
 //////////////////////////////////BEGIN DOUBLE CLICK XML STOPPER//////////////////////////////////
 const stopDoubleClickXml = () => {
@@ -660,7 +850,7 @@ const stopDoubleClickXml = () => {
 }
 //////////////////////////////////END DOUBLE CLICK XML STOPPER/////////////////////////////////////
 /////////////////////////////////////BEGIN FRAUD CHECK TOOLS//////////////////////////////////////
-
+/* Currently unused fraud tool
 const bTreeTab = document.querySelector("#custom189_div") ? document.querySelector("#custom189_div") : 'NA';
 
 const cst = {
@@ -893,10 +1083,10 @@ const createSearchLinks = () => {
     }
     return links;
 }
-
+*/
 /////////////////////////////////////END FRAUD CHECK TOOLS//////////////////////////////////////
 ////////////////////////////////////////BEGIN CASE TOOL////////////////////////////////////////
-
+/* Unfinished and unused case tool
 const countCases = () => {
     if (!document.querySelector(`#casesrow0`)) {
         return "NA";
@@ -931,7 +1121,7 @@ const grabCases = () => {
 const showCases = () => {
     return;
 }
-
+*/
 ////////////////////////////////////////END CASE TOOL////////////////////////////////////////
 ///////////////////////BEGIN EXTRA SCROLL BAR ELIMINATOR///////////////////////
 // document.querySelector("div[style*='scroll hidden']").style.overflow = 'hidden'
@@ -983,23 +1173,40 @@ const loadCheck = VM.observe(document.body, () => {
 
     if (node) {
         changeLogResize();
-        grabCases();
+        hideButtons();
+        if (!isEd) {
+            displayExpGPInfo();
+        }
+        // grabCases();
         if (!isEST) {
             copyNoteButton();
         }
-        getFraudInfoBtn();
-        parseAddress();
+        // getFraudInfoBtn();
+        // parseAddress();
         stopDoubleClickXml();
+        // autoProcess();
         const sbarObserver = new MutationObserver(lookForScrollBars);
         sbarObserver.observe(document.body, sbarConfig);
-        const links = createSearchLinks();
+        // const links = createSearchLinks();
         // We are lazy and let the browser figure out that a space in a link is the same as %20
-        const html = `<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <title>Fraud Checking</title> </head> <body> <style> #fraudlinks { display: flex; /* flex-wrap: wrap; */ /* align-content: center; */ justify-content: center; margin-top: 20px; } #addressinfo { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; } #billtodetails { display: inline-block; border: 1px solid black; } #shiptodetails { display: inline-block; border: 1px solid black; margin-left: 12px; } .container { width: auto; min-width: 246px; margin: 0px 6px; padding: 3px 6px; border: 1px solid black; } .result.container { width: 33%; min-width: 165px; } .search { display: flex; flex-wrap: wrap; justify-content: space-between; width: auto; margin: 0px 6px; padding: 3px 6px; } .term { margin-right: 30px; } .links { display: inline-block; flex-wrap: wrap; align-content: center; } .bold { font-weight: 600; } .inline { display: inline; } h3 { margin-top: 0px; align-self: center; justify-content: center; text-align: center; } img { height: 32px; width: 32px; } a { text-decoration: none; } </style> <div id="addressinfo"> <div id="billtodetails" class="container"> <h3>Bill-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.bill.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.bill.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.bill.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.bill.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.bill.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.bill.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.bill.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.bill.country}</p> <br /> </div> <div id="shiptodetails" class="container"> <h3>Ship-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.ship.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.ship.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.ship.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.ship.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.ship.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.ship.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.ship.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.ship.country}</p> <br /> </div> </div> <div id="fraudlinks"> <div class="result container"> <h3>Bill-to Address Searches</h3> ${links.bill.html} </div> <div class="result container"> <h3>Hybrid Searches</h3> ${links.hybrid.html} </div> <div class="result container"> <h3>Ship-to Address Searches</h3> ${links.ship.html} <!-- <div class="search"> <div class="term inline"> <p class="bold">Street/Suite + City/State/Zip:</p> <p> ${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite} ${cst.ship.city} ${cst.ship.state} ${cst.ship.zip} </p> </div> <div class="links"> <a href="https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite}&citystatezip=${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}" target="_blank" > <img src="https://play-lh.googleusercontent.com/aNUH0g2ASIp8tN9OnJpccMxQJDkZLPxrKWhw2OnGkDNA2WLePAOU9iWSXkSt5P3OY_0=w240-h480-rw" alt="TruePeopleSearch" title="TruePeopleSearch" /> </a> </div> </div> --> </div> </div> </body> </html>`;
-        const fraudFrame = createFraudFrame();
-        bTreeTab.before(fraudFrame);
-        fraudFrame.contentWindow.document.open();
-        fraudFrame.contentWindow.document.write(html);
-        fraudFrame.contentWindow.document.close();
+        // const html = `<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <title>Fraud Checking</title> </head> <body> <style> #fraudlinks { display: flex; /* flex-wrap: wrap; */ /* align-content: center; */ justify-content: center; margin-top: 20px; } #addressinfo { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; } #billtodetails { display: inline-block; border: 1px solid black; } #shiptodetails { display: inline-block; border: 1px solid black; margin-left: 12px; } .container { width: auto; min-width: 246px; margin: 0px 6px; padding: 3px 6px; border: 1px solid black; } .result.container { width: 33%; min-width: 165px; } .search { display: flex; flex-wrap: wrap; justify-content: space-between; width: auto; margin: 0px 6px; padding: 3px 6px; } .term { margin-right: 30px; } .links { display: inline-block; flex-wrap: wrap; align-content: center; } .bold { font-weight: 600; } .inline { display: inline; } h3 { margin-top: 0px; align-self: center; justify-content: center; text-align: center; } img { height: 32px; width: 32px; } a { text-decoration: none; } </style> <div id="addressinfo"> <div id="billtodetails" class="container"> <h3>Bill-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.bill.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.bill.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.bill.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.bill.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.bill.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.bill.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.bill.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.bill.country}</p> <br /> </div> <div id="shiptodetails" class="container"> <h3>Ship-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.ship.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.ship.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.ship.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.ship.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.ship.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.ship.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.ship.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.ship.country}</p> <br /> </div> </div> <div id="fraudlinks"> <div class="result container"> <h3>Bill-to Address Searches</h3> ${links.bill.html} </div> <div class="result container"> <h3>Hybrid Searches</h3> ${links.hybrid.html} </div> <div class="result container"> <h3>Ship-to Address Searches</h3> ${links.ship.html} <!-- <div class="search"> <div class="term inline"> <p class="bold">Street/Suite + City/State/Zip:</p> <p> ${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite} ${cst.ship.city} ${cst.ship.state} ${cst.ship.zip} </p> </div> <div class="links"> <a href="https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite}&citystatezip=${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}" target="_blank" > <img src="https://play-lh.googleusercontent.com/aNUH0g2ASIp8tN9OnJpccMxQJDkZLPxrKWhw2OnGkDNA2WLePAOU9iWSXkSt5P3OY_0=w240-h480-rw" alt="TruePeopleSearch" title="TruePeopleSearch" /> </a> </div> </div> --> </div> </div> </body> </html>`;
+        // const fraudFrame = createFraudFrame();
+        // bTreeTab.before(fraudFrame);
+        // fraudFrame.contentWindow.document.open();
+        // fraudFrame.contentWindow.document.write(html);
+        // fraudFrame.contentWindow.document.close();
+
+        // disconnect observer
+        return true;
+    }
+});
+
+const pcsLoadCheck = VM.observe(document.body, () => {
+    // Find the target node
+    const node = document.querySelector(`#item_row_1 > td:nth-child(1)`);
+
+    if (node) {
+        autoProcess();
 
         // disconnect observer
         return true;
