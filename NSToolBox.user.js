@@ -4,12 +4,13 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/estimate.nl*
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/transactionlist.nl*
+// @match       https://1206578.app.netsuite.com/app/crm/support/supportcase.nl*
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCopyComment/main/NSToolBox.user.js
 // @grant       GM.setValue
 // @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.54
+// @version     1.55
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -33,29 +34,29 @@ function debug(stuff) {
     }
 }
 
+// New simpler function to capture table data as 2D array
+// Does not care if the table is in edit mode or not, but may return empty rows if in edit mode
+// Modified from other scripts to push the actual elements
+function captureTableData(tableElement, textOnly = false) {
+    const rows = tableElement.querySelectorAll("tr");
+    const data = [];
+    rows.forEach(row => {
+        const cols = row.querySelectorAll("td,th");
+        const rowData = [];
+        cols.forEach(col => {
+            rowData.push(textOnly ? col.textContent.trim() : col);
+        });
+        data.push(rowData);
+    });
+    return data;
+}
+
 ///////////////////////////////////BEGIN TRANSACTION/SEARCH SCRIPTS////////////////////////////////////
 
 // TODO: Add more flag types, make it easier to add flags
 // TODO: Make the sort list collapsible and consider if it should be collapsed by default
 // Test if the URL is a transaction search and proceed with relevant scripts
 if (url.includes("transactionlist")) {
-
-    // New simpler function to capture table data as 2D array
-    // Does not care if the table is in edit mode or not, but may return empty rows if in edit mode
-    // Modified from other scripts to push the actual elements
-    function captureTableData(tableElement) {
-        const rows = tableElement.querySelectorAll("tr");
-        const data = [];
-        rows.forEach(row => {
-            const cols = row.querySelectorAll("td,th");
-            const rowData = [];
-            cols.forEach(col => {
-                rowData.push(col);
-            });
-            data.push(rowData);
-        });
-        return data;
-    }
 
     let colIndex = { // Similar to itmCol, eventually stores column names.
         doc: "DOCUMENT #",
@@ -68,10 +69,80 @@ if (url.includes("transactionlist")) {
 
 
     // Important note: the browser may block pop-ups if opening multiple tabs. The user can either click the "Pop Ups Blocked" notification in the URL bar and allow them, or on Chrome navigate to Settings > Privacy and security > Site settings > Pop-ups and redirects (chrome://settings/content/popups) and then add NetSuite
-    function open_tabs(urls) {
-        urls.forEach((url) => {
-            debug(`Opening ${url}`);
-            window.open(url);
+    function open_tabs(urls, sos) {
+        urls.forEach((url, soIndex) => {
+            // debug(`Opening ${url}`);
+            // window.open(url);
+            // Experimentally opening a tab with a preload URL so we don't actually load all the pages at once
+            //////////////////////////////////////////////
+            console.log(`Opening holding tab for ${url}`);
+
+            // Open a blank new tab
+            const tab = window.open('', '_blank');
+
+            // Check if the browser's popup blocker prevented the tab from opening
+            if (tab) {
+                // Inject the holding page HTML and logic into the new tab
+                tab.document.write(`
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Standby${sos ? ' ' + sos[soIndex] : '...'}</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f9f9f9;
+      }
+      .message {
+        text-align: center;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="message">
+      <h2>Tab Inactive</h2>
+      <p>The content will load when you view this tab.</p>
+    </div>
+    <script>
+      const targetUrl = "${url}";
+
+      function loadTarget() {
+        // If the user is currently looking at the tab, load the URL
+        if (document.visibilityState === "visible") {
+          // Using .replace() means this holding page won't clog up the user's "Back" button history
+          // Wait a short time before performing the redirect so the initial opening phase doesn't trigger it
+          setTimeout(() => {
+            if (document.visibilityState === "visible") {
+              window.location.replace(targetUrl);
+            }
+          }, 500);
+        }
+      }
+
+      // Fire immediately in case the browser focuses the new tab right away
+      loadTarget();
+
+      // Listen for the user switching to this tab
+      document.addEventListener("visibilitychange", loadTarget);
+    </script>
+  </body>
+</html>
+`
+                );
+
+                // Close the document stream so the browser finishes rendering the holding page
+                tab.document.close();
+
+            } else {
+                console.warn(`Popup blocked for ${url}. Please allow popups for this site.`);
+            }
         });
     }
 
@@ -200,6 +271,7 @@ if (url.includes("transactionlist")) {
         });
         debug(tableState);
         const orderURLs = [];
+        const orderSOs = [];
         switch (scope) {
             case "All":
                 // Foreach flag types, loop through all orders
@@ -211,25 +283,29 @@ if (url.includes("transactionlist")) {
                         // Idea: reverse the order of the flagOrder, find if they are included in the flag list at all and remove from tablestate, then reverse orderURLs so the "worst" flags are always pushed out last
                         if (tableState[j].op == userName && tableState[j].flags.types.includes(type)) {
                             orderURLs.push(tableState[j].url);
+                            orderSOs.push(tableState[j].so);
                             tableState.splice(j, 1);
                             j--;
                         }
                     };
                 })
                 orderURLs.reverse(); // This is to make sure the "worst" flags are opened first, since they're pushed last
+                orderSOs.reverse();
                 break;
             // Otherwise, just loop through orders and open ones that match the selected scope
             default:
                 for (let i = 0; i <= tableState.length - 1; i++) {
                     if (tableState[i].op == userName && tableState[i].flags.types.includes(scope)) {
                         orderURLs.push(tableState[i].url);
+                        orderSOs.push(tableState[i].so);
                     }
                 }
                 break;
         }
         debug(orderURLs);
         debug(userName);
-        open_tabs(orderURLs);
+        debug(orderSOs);
+        open_tabs(orderURLs, orderSOs);
     }
 
     const countOrders = () => {
@@ -523,7 +599,7 @@ async function grabXMLasJSON(url) {
     }
 }
 
-async function displayExpGPInfo() {
+async function displayExpGPInfo(lgp = false) {
     // Gather GP info for expedited shipments
     const getStandardOvernight = new RegExp('Service: FedEx Standard Overnight®, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
     const getPriorityOvernight = new RegExp('Service: FedEx Priority Overnight®, Quoted Rate: (\\d+\\.\\d{1,2})', 'i');
@@ -537,15 +613,22 @@ async function displayExpGPInfo() {
     const poCosts = Number(expGPInfo.record.custrecord_gp_est_po);
     const stockCosts = Number(expGPInfo.record.custrecord_gp_est_item);
     const shipCosts = Number(expGPInfo.record.custrecord_gp_est_ship);
+    const finalAmount = Number(expGPInfo.record?.custrecord_gp_invoice);
+    const finalPO = Number(expGPInfo.record?.custrecord_gp_po);
+    const finalStock = Number(expGPInfo.record?.custrecord_gp_item);
+    const finalShip = Number(expGPInfo.record?.custrecord_gp_ship);
+    const finalGP = expGPInfo.record?.custrecord_gp_per;
 
     const shipInfo = await grabXMLasJSON(shipurl);
-    const parcelInfo = shipInfo.record.custrecord_sq_quoted_parcel_rates.replaceAll(cleanTags, '');
+    let parcelInfo = shipInfo.record?.custrecord_sq_quoted_parcel_rates?.replaceAll(cleanTags, '');
     // Ship quote info
+    if (!parcelInfo) parcelInfo = "Not Found";
     const standardOvernight = parcelInfo.match(getStandardOvernight)?.[1] || "Not Found";
     const priorityOvernight = parcelInfo.match(getPriorityOvernight)?.[1] || "Not Found";
     const twoDay = parcelInfo.match(getTwoDay)?.[1] || "Not Found";
     const twoDayAM = parcelInfo.match(getTwoDayAM)?.[1] || "Not Found";
-    const cstCost = document.querySelector("#shippingcost_fs_lbl_uir_label").nextElementSibling.textContent.trim();
+    let cstCost = document.querySelector("#shippingcost_fs_lbl_uir_label")?.nextElementSibling.textContent.trim();
+    if (!cstCost) cstCost = 0;
 
     const marginNow = (orderAmount - poCosts - stockCosts - cstCost) / orderAmount;
     const marginWithTwoDay = twoDay === "Not Found" ? undefined : (orderAmount - poCosts - stockCosts - twoDay) / orderAmount;
@@ -606,6 +689,41 @@ async function displayExpGPInfo() {
     };
     quoteTr.innerHTML = `<td> <div class="uir-field-wrapper uir-long-text" data-nsps-label="Expedited Shipping Quotes" data-nsps-type="field" > <span id="cust_exp_span_span" class="smallgraytextnolink uir-label" data-nsps-type="field_label" ><span id="cust_exp_span" class="uir-label-span smallgraytextnolink" style="" data-nsps-type="label" ><a tabindex="-1" title="What's this?" href='javascript:void("help")' style="cursor: help" class="smallgraytextnolink uir-no-link" onmouseover="setFirstClassName(this, 'smallgraytext'); return true;" onmouseout="setFirstClassName(this, 'smallgraytextnolink'); " >Expedited Shipping Quotes</a > </span></span ><span class="uir-field inputreadonly uir-resizable" data-nsps-type="field_input" data-field-type="textarea"><b>Standard Overnight:</b> $${standardOvernight}<br><b>Priority Overnight:</b> $${priorityOvernight}<br><b>2Day:</b> $${twoDay}<br><b>2Day AM:</b> $${twoDayAM} </span> </div> </td>`;
 
+    // Integrating ship cost info
+    if (lgp) {
+        const shipCostTable = captureTableData(document.querySelector("#recmachcustrecord_pacejet_transaction_link__tab"), true);
+        const net = shipCostTable[0].indexOf("Net charge"); // Find the column with the actual charge
+        console.log(`Column is at index ${net}`);
+        shipCostTable.shift(); // Remove the header row so we can loop through just the data
+        let shipCost = 0;
+        if (net != -1) {
+            for (let i = 0, end = shipCostTable.length; i < end; i++) {
+                console.log(`Adding cost: ${shipCostTable[i][net]}`);
+                shipCost += Number(shipCostTable[i][net]);
+            }
+        }
+
+        let realMargin = undefined;
+        if (finalAmount) {
+            realMargin = (finalAmount - finalPO - finalStock - shipCost) / finalAmount;
+        }
+        const shipTr = document.createElement("tr");
+        shipTr.className = "uir-field-wrapper-cell";
+        shipTr.id = "cust_shipcost_info";
+        shipTr.innerHTML = `<td> <div class="uir-field-wrapper uir-long-text" data-nsps-label="True Shipping Cost" data-nsps-type="field" > <span id="cust_exp_span_span" class="smallgraytextnolink uir-label" data-nsps-type="field_label" ><span id="cust_exp_span" class="uir-label-span smallgraytextnolink" style="" data-nsps-type="label" ><a tabindex="-1" title="What's this?" href='javascript:void("help")' style="cursor: help" class="smallgraytextnolink uir-no-link" onmouseover="setFirstClassName(this, 'smallgraytext'); return true;" onmouseout="setFirstClassName(this, 'smallgraytextnolink'); " >True Shipping Cost</a > </span></span ><span class="uir-field inputreadonly uir-resizable" data-nsps-type="field_input" data-field-type="textarea"><b>Recorded Shipping Cost/GP: $${finalShip}, GP: ${finalGP}</b><br><b>True Shipping Cost:</b> $${shipCost.toFixed(2)}<br>GP calculated expected ship cost. Invoiced cost is $${shipCost.toFixed(2)}, GP ${realMargin ? (realMargin * 100).toFixed(2) : "0.00"}%</span> </div> </td>`;
+        const copyRealMarginButton = document.createElement("button");
+        copyRealMarginButton.textContent = "Copy Real Margin";
+        copyRealMarginButton.onclick = () => {
+            preventDefault();
+            stopPropagation();
+            navigator.clipboard.writeText(`GP calculated expected ship cost. Invoiced cost is $${shipCost.toFixed(2)}, GP ${realMargin ? (realMargin * 100).toFixed(2) : "0.00"}%`);
+        };
+
+        gpTr.insertAdjacentElement("afterend", copyRealMarginButton);
+        gpTr.insertAdjacentElement("afterend", shipTr);
+    }
+    // End integration of ship cost info
+
     gpTr.insertAdjacentElement("afterend", oneDayButton);
     gpTr.insertAdjacentElement("afterend", twoDayButton);
     gpTr.insertAdjacentElement("afterend", quoteTr);
@@ -643,6 +761,23 @@ function hideButtons() {
     // document.querySelector("#tdbody_unhide").appendChild(unHideButton);
 }
 /////////////////////////////////////////END HIDE USED BUTTONS////////////////////////////////////////
+//////////////////////////////////BEGIN FIX FOR WHITE SPACE SETTING//////////////////////////////////
+const whiteSpaceList = [];
+function fixWhiteSpaceNodes(node) {
+    for (let child of node.children) {
+        if (child.style?.whiteSpace == "pre") {
+            whiteSpaceList.push(child);
+        }
+        if (child.children.length > 0) {
+            fixWhiteSpaceNodes(child);
+        }
+    }
+    whiteSpaceList.forEach(node => {
+        node.style.whiteSpace = "normal";
+    });
+    return whiteSpaceList;
+}
+///////////////////////////////////END FIX FOR WHITE SPACE SETTING////////////////////////////////////
 ///////////////////////////////BEGIN DELIVERY INSTRUCTIONS COPY BUTTON///////////////////////////////
 
 // Function to resize potentially giant changelogs
@@ -806,39 +941,17 @@ function autoProcess() {
     }
 }
 ////////////////////////////////////END AUTO PROCESSING FUNCTION//////////////////////////////////
-////////////////////////////////////BEGIN FRAUD INFO COPY BUTTON//////////////////////////////////
-/* Currently unused fraud copy button
-const getFraudInfo = () => {
-    if (!document.querySelector("[data-field-name='custbody_kountlink']").innerText.includes("Link")) {
-        return;
+////////////////////////////////BEGIN RISK SCORE IN TITLE FUNCTION///////////////////////////////
+function riskTitle() {
+    if (document.querySelector("#tr_fg_fieldGroup325 > td:nth-child(1) > table > tbody > tr:nth-child(4) > td > div > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(2) > td:nth-child(2)")) {
+        const fraudDecision = document.querySelector("#tr_fg_fieldGroup325 > td:nth-child(1) > table > tbody > tr:nth-child(4) > td > div > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(2) > td:nth-child(1)").textContent;
+        if (fraudDecision == "REVIEW") {
+            const riskScore = document.querySelector("#tr_fg_fieldGroup325 > td:nth-child(1) > table > tbody > tr:nth-child(4) > td > div > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(2) > td:nth-child(2)").textContent;
+            document.title += ` [${riskScore}]`;
+        }
     }
-    const salesOrd = document.querySelector("#tranid_fs_lbl_uir_label").nextElementSibling.innerText;
-    const dateCreated = document.querySelector("#custbody_esc_created_date_fs_lbl_uir_label").nextElementSibling.innerText;
-    const amount = document.querySelector("#custbody34_fs_lbl_uir_label").nextElementSibling.innerText;
-    const riskScore = document.querySelector("[data-field-name='custbody_riskdata'] > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(2) > td:nth-child(2)").innerText;
-    const triggers = document.querySelector("[data-field-name='custbody_riskdata'] > span.uir-field.inputreadonly.uir-user-styled.uir-resizable > figure > table > tbody > tr:nth-child(4) > td").innerText;
-    const avs = document.querySelector("#custbody119_fs_lbl_uir_label").nextElementSibling.innerText;
-    const cvv = document.querySelector("#custbody118_fs_lbl_uir_label").nextElementSibling.innerText;
-
-    let fraudInfo = [salesOrd, dateCreated, amount, riskScore, triggers, avs, cvv];
-    fraudInfo = fraudInfo.map((el) => `"${el}"`);
-
-    navigator.clipboard.writeText(fraudInfo.join("	"));
 }
-
-const getFraudInfoBtn = () => {
-    const btn = document.createElement("button");
-    btn.innerHTML = "Copy Fraud Info";
-    const fraudReview = document.querySelector("[data-field-name='custbody78']")
-    fraudReview.insertAdjacentElement("beforebegin", btn);
-    btn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        getFraudInfo();
-    });
-}
-    */
-////////////////////////////////////END FRAUD INFO COPY BUTTON/////////////////////////////////////
+/////////////////////////////////END RISK SCORE IN TITLE FUNCTION//////////////////////////////////
 //////////////////////////////////BEGIN DOUBLE CLICK XML STOPPER//////////////////////////////////
 const stopDoubleClickXml = () => {
     console.log("Stopping double-click XML");
@@ -849,280 +962,6 @@ const stopDoubleClickXml = () => {
     }, true);
 }
 //////////////////////////////////END DOUBLE CLICK XML STOPPER/////////////////////////////////////
-/////////////////////////////////////BEGIN FRAUD CHECK TOOLS//////////////////////////////////////
-/* Currently unused fraud tool
-const bTreeTab = document.querySelector("#custom189_div") ? document.querySelector("#custom189_div") : 'NA';
-
-const cst = {
-    bill: {
-        name: 'N/A',
-        company: 'N/A',
-        street: 'N/A',
-        suite: 'N/A',
-        csz: 'N/A',
-        city: 'N/A',
-        state: 'N/A',
-        zip: 'N/A',
-        country: 'N/A',
-        phone: 'N/A'
-    },
-    ship: {
-        name: 'N/A',
-        company: 'N/A',
-        street: 'N/A',
-        suite: 'N/A',
-        csz: 'N/A',
-        city: 'N/A',
-        state: 'N/A',
-        zip: 'N/A',
-        country: 'N/A',
-        phone: 'N/A'
-    }
-};
-
-const ifNA = (arg) => {
-    arg == 'N/A' ? true : false;
-}
-
-const parseAddress = () => {
-    try {
-        const billphone = isEd ? document.querySelector("#custbodybilling_phone_number").value : document.querySelector("#custbodybilling_phone_number_fs_lbl_uir_label").nextElementSibling.innerText;
-        const shipphone = isEd ? document.querySelector("#custbodyshipphonenumber").value : document.querySelector("#custbodyshipphonenumber_fs_lbl_uir_label").nextElementSibling.innerText;
-        cst.bill.phone = billphone;
-        cst.ship.phone = shipphone;
-    } catch (error) {
-        debug(error);
-    }
-    const shipAddress = isEd ? document.querySelector("#shipaddress").innerHTML : document.querySelector("#shipaddress_fs_lbl_uir_label").nextElementSibling.innerText;
-    const billAddress = isEd ? document.querySelector("#billaddress").innerHTML : document.querySelector("#billaddress_fs_lbl_uir_label").nextElementSibling.innerText;
-    const shipArray = shipAddress.split('\n');
-    const billArray = billAddress.split('\n');
-    const streetReg = new RegExp(/^\d+/);
-    const suiteReg = new RegExp(/^(Unit|Suite|Ste|Fl|Apt) /i);
-    const cszReg = new RegExp(/\w{2} \d{5}/);
-    const countryReg = new RegExp(/Map$/);
-    const breakCSZ = new RegExp(/(?<city>[\w ]*) (?<state>\w{2}) (?<zip>\d{5})-*(?<zip4>\d{0,4})/)
-    let currentSearch = 'Ship-to';
-    shipArray.forEach((element, index) => {
-        switch (true) {
-            case streetReg.test(element):
-                debug(`Street address (${currentSearch}) found on line ${index + 1}`);
-                cst.ship.street = element;
-                break;
-            case suiteReg.test(element):
-                debug(`Suite number (${currentSearch}) found on line ${index + 1}`);
-                cst.ship.suite = element;
-                break;
-            case cszReg.test(element):
-                debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
-                const csz = breakCSZ.exec(element);
-                if (csz) {
-                    cst.ship.city = csz.groups.city;
-                    cst.ship.state = csz.groups.state;
-                    cst.ship.zip = csz.groups.zip;
-                }
-                break;
-            case countryReg.test(element):
-                debug(`Country (${currentSearch}) found on line ${index + 1}`);
-                cst.ship.country = element.replace("Map", "").trim();
-                break;
-            default:
-                if (index == 1) {
-                    debug(`Company (${currentSearch}) found on line ${index + 1}`);
-                    cst.ship.company = element;
-                } else if (index == 0) {
-                    debug(`Customer (${currentSearch}) found on line ${index + 1}`);
-                    cst.ship.name = element;
-                } else {
-                    debug(`No matches found for ${element}`);
-                }
-                break;
-        }
-    });
-    currentSearch = 'Bill-to';
-    billArray.forEach((element, index) => {
-        switch (true) {
-            case streetReg.test(element):
-                debug(`Street address (${currentSearch}) found on line ${index + 1}`);
-                cst.bill.street = element;
-                break;
-            case suiteReg.test(element):
-                debug(`Suite number (${currentSearch}) found on line ${index + 1}`);
-                cst.bill.suite = element;
-                break;
-            case cszReg.test(element):
-                debug(`City/State/Zip (${currentSearch}) found on line ${index + 1}`);
-                const csz = breakCSZ.exec(element);
-                if (csz) {
-                    cst.bill.city = csz.groups.city;
-                    cst.bill.state = csz.groups.state;
-                    cst.bill.zip = csz.groups.zip;
-                }
-                break;
-            case countryReg.test(element):
-                debug(`Country (${currentSearch}) found on line ${index + 1}`);
-                cst.bill.country = element.replace("Map", "").trim();
-                break;
-            default:
-                if (index == 1) {
-                    debug(`Company (${currentSearch}) found on line ${index + 1}`);
-                    cst.bill.company = element;
-                } else if (index == 0) {
-                    debug(`Customer (${currentSearch}) found on line ${index + 1}`);
-                    cst.bill.name = element;
-                } else {
-                    debug(`No matches found for ${element}`);
-                }
-                break;
-        }
-    });
-    cst.bill.csz = `${cst.bill.city} ${cst.bill.state} ${cst.bill.zip}`;
-    cst.ship.csz = `${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}`;
-}
-
-const createFraudFrame = () => {
-    const fraudFrame = document.createElement("iframe");
-    fraudFrame.id = 'FraudFrame';
-    fraudFrame.title = 'Fraud Info';
-    fraudFrame.style.width = '1140px';
-    fraudFrame.style.height = '305px';
-    fraudFrame.style.marginTop = '10px';
-    fraudFrame.style.resize = 'both';
-    fraudFrame.style.overflow = 'auto';
-    return fraudFrame;
-}
-
-const createSearchLinks = () => {
-    const links = {
-        providers: {
-            tps: "TruePeopleSearch",
-            fps: "FastPeopleSearch",
-            gle: "Google Search",
-            li: "LinkedIn Search"
-        },
-        icons: {
-            tps: "https://play-lh.googleusercontent.com/aNUH0g2ASIp8tN9OnJpccMxQJDkZLPxrKWhw2OnGkDNA2WLePAOU9iWSXkSt5P3OY_0=w240-h480-rw",
-            fps: "https://www.officecoffeesolutions.com/assets/graphics/img/sustainability/grid/community.jpg",
-            gle: "https://cdn-icons-png.flaticon.com/512/3128/3128287.png",
-            li: "https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png"
-        },
-        bill: {
-            html: "",
-            titles: ["Phone Number", "Street/Suite + City/State/Zip", "Customer Name + City/State/Zip", "Customer Name + Company"],
-            results: [cst.bill.phone, `${cst.bill.street}${cst.bill.suite == 'N/A' ? "" : ` ${cst.bill.suite}`} + ${cst.bill.csz}`, `${cst.bill.name} + ${cst.bill.csz}`, `${cst.bill.name} + ${cst.bill.company}`],
-            tps: [`https://www.truepeoplesearch.com/resultphone?phoneno=${cst.bill.phone}`, `https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.bill.street}&citystatezip=${cst.bill.csz}`, `https://www.truepeoplesearch.com/results?name=${cst.bill.name}&citystatezip=${cst.bill.csz}`, `NA`],
-            fps: [`https://www.fastpeoplesearch.com/${cst.bill.phone}`, `https://www.fastpeoplesearch.com/address/${cst.bill.street}_${cst.bill.csz}`, `https://www.fastpeoplesearch.com/name/${cst.bill.name}_${cst.bill.csz}`, `NA`],
-            gle: [`https://www.google.com/search?q=${cst.bill.phone}`, `https://www.google.com/search?q=${cst.bill.street.replaceAll(' ', '+')}+${cst.bill.csz.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.bill.name.replaceAll(' ', '+')}+${cst.bill.csz.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.bill.name.replaceAll(' ', '+')}+${cst.bill.company.replaceAll(' ', '+')}`],
-            li: [`NA`, `NA`, `NA`, `https://www.linkedin.com/search/results/all/?keywords=${cst.bill.name} ${cst.bill.company}&origin=GLOBAL_SEARCH_HEADER`]
-        },
-        ship: {
-            html: "",
-            titles: ["Phone Number", "Street/Suite + City/State/Zip", "Customer Name + City/State/Zip", "Customer Name + Company"],
-            results: [cst.ship.phone, `${cst.ship.street}${cst.ship.suite == 'N/A' ? "" : ` ${cst.ship.suite}`} + ${cst.ship.csz}`, `${cst.ship.name} + ${cst.ship.csz}`, `${cst.ship.name} + ${cst.ship.company}`],
-            tps: [`https://www.truepeoplesearch.com/resultphone?phoneno=${cst.ship.phone}`, `https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.ship.street}&citystatezip=${cst.ship.csz}`, `https://www.truepeoplesearch.com/results?name=${cst.ship.name}&citystatezip=${cst.ship.csz}`, `NA`],
-            fps: [`https://www.fastpeoplesearch.com/${cst.ship.phone}`, `https://www.fastpeoplesearch.com/address/${cst.ship.street}_${cst.ship.csz}`, `https://www.fastpeoplesearch.com/name/${cst.ship.name}_${cst.ship.csz}`, `NA`],
-            gle: [`https://www.google.com/search?q=${cst.ship.phone}`, `https://www.google.com/search?q=${cst.ship.street.replaceAll(' ', '+')}+${cst.ship.csz.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.ship.name.replaceAll(' ', '+')}+${cst.ship.csz.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.ship.name.replaceAll(' ', '+')}+${cst.ship.company.replaceAll(' ', '+')}`],
-            li: [`NA`, `NA`, `NA`, `https://www.linkedin.com/search/results/all/?keywords=${cst.ship.name} ${cst.ship.company}&origin=GLOBAL_SEARCH_HEADER`]
-        },
-        hybrid: {
-            html: "",
-            titles: ["Bill Name + Ship Name", "Ship Name + Bill Company", "Bill Name + Ship Company", "Ship Name + Bill City/State/Zip", "Bill Name + Ship City/State/Zip"],
-            results: [`${cst.bill.name} + ${cst.ship.name}`, `${cst.ship.name} + ${cst.bill.company}`, `${cst.bill.name} + ${cst.ship.company}`, `${cst.ship.name} + ${cst.bill.csz}`, `${cst.bill.name} + ${cst.ship.csz}`],
-            tps: [`NA`, `NA`, `NA`, `https://www.truepeoplesearch.com/results?name=${cst.ship.name}&citystatezip=${cst.bill.csz}`, `https://www.truepeoplesearch.com/results?name=${cst.bill.name}&citystatezip=${cst.ship.csz}`],
-            fps: [`NA`, `NA`, `NA`, `https://www.fastpeoplesearch.com/name/${cst.ship.name}_${cst.bill.csz}`, `https://www.fastpeoplesearch.com/name/${cst.bill.name}_${cst.ship.csz}`],
-            gle: [`https://www.google.com/search?q=${cst.bill.name.replaceAll(' ', '+')}+${cst.ship.name.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.ship.name.replaceAll(' ', '+')}+${cst.bill.company.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.bill.name.replaceAll(' ', '+')}+${cst.ship.company.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.ship.name.replaceAll(' ', '+')}+${cst.bill.csz.replaceAll(' ', '+')}`, `https://www.google.com/search?q=${cst.bill.name.replaceAll(' ', '+')}+${cst.ship.csz.replaceAll(' ', '+')}`],
-            li: [`NA`, `https://www.linkedin.com/search/results/all/?keywords=${cst.ship.name} ${cst.bill.company}&origin=GLOBAL_SEARCH_HEADER`, `https://www.linkedin.com/search/results/all/?keywords=${cst.bill.name} ${cst.ship.company}&origin=GLOBAL_SEARCH_HEADER`, `NA`, `NA`]
-        }
-    }
-    let ahtml = "";
-    // For loop, we'll just use the highest number of results for a given type
-    for (let i = 0; i < 5; i++) {
-        // Each loop is going through one "results" header and checking each provider for a valid link
-        const provider = ["tps", "fps", "gle", "li"];
-        // Set a variable for dynamic object access
-        let type = "bill";
-        ahtml = "";
-        // Check if there are any null fields in the current search attempt and discard if so
-        if (i <= links[type].titles.length - 1) {
-            if (!links[type].results[i].includes('N/A')) {
-                provider.forEach((prdr) => {
-                    if (links[type][prdr][i] != 'NA') {
-                        ahtml += `<a href="${links[type][prdr][i]}" target="_blank" > <img src="${links.icons[prdr]}" alt="${links.providers[prdr]}" title="${links.providers[prdr]}" /> </a>`
-                    }
-                });
-                links[type].html += `<div class="search"> <div class="term inline"> <p class="bold">${links[type].titles[i]}:</p> <p> ${links[type].results[i]} </p> </div> <div class="links"> ${ahtml} </div> </div>`
-            }
-        }
-        // Reset the temporary html build and go through shipping results
-        ahtml = "";
-        type = "ship";
-        if (i <= links[type].titles.length - 1) {
-            if (!links[type].results[i].includes('N/A')) {
-                provider.forEach((prdr) => {
-                    if (links[type][prdr][i] != 'NA') {
-                        ahtml += `<a href="${links[type][prdr][i]}" target="_blank" > <img src="${links.icons[prdr]}" alt="${links.providers[prdr]}" title="${links.providers[prdr]}" /> </a>`
-                    }
-                });
-                links[type].html += `<div class="search"> <div class="term inline"> <p class="bold">${links[type].titles[i]}:</p> <p> ${links[type].results[i]} </p> </div> <div class="links"> ${ahtml} </div> </div>`
-            }
-        }
-        // Reset one last time and go through hybrid results
-        ahtml = "";
-        type = "hybrid";
-        if (i <= links[type].titles.length - 1) {
-            if (!links[type].results[i].includes('N/A')) {
-                provider.forEach((prdr) => {
-                    if (links[type][prdr][i] != 'NA') {
-                        ahtml += `<a href="${links[type][prdr][i]}" target="_blank" > <img src="${links.icons[prdr]}" alt="${links.providers[prdr]}" title="${links.providers[prdr]}" /> </a>`
-                    }
-                });
-                links[type].html += `<div class="search"> <div class="term inline"> <p class="bold">${links[type].titles[i]}:</p> <p> ${links[type].results[i]} </p> </div> <div class="links"> ${ahtml} </div> </div>`
-            }
-        }
-
-    }
-    return links;
-}
-*/
-/////////////////////////////////////END FRAUD CHECK TOOLS//////////////////////////////////////
-////////////////////////////////////////BEGIN CASE TOOL////////////////////////////////////////
-/* Unfinished and unused case tool
-const countCases = () => {
-    if (!document.querySelector(`#casesrow0`)) {
-        return "NA";
-    }
-    let caseCount = 0;
-    while (document.querySelector(`#casesrow${caseCount}`)) {
-        caseCount++
-    }
-    return caseCount - 1;
-}
-
-const grabCases = () => {
-    const caseCount = countCases();
-    if (caseCount == "NA") {
-        return caseCount;
-    }
-    let curCase = 0;
-    let curInfo = [];
-    const caseInfo = [];
-    while (curCase <= caseCount) {
-        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[7].textContent);
-        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[5].textContent);
-        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[9].textContent)
-        curInfo.push(document.querySelector(`#casesrow${curCase}`).childNodes[5].firstChild.href);
-        caseInfo.push(curInfo);
-        curInfo = [];
-        curCase++;
-    }
-    console.log(caseInfo);
-}
-
-const showCases = () => {
-    return;
-}
-*/
-////////////////////////////////////////END CASE TOOL////////////////////////////////////////
 ///////////////////////BEGIN EXTRA SCROLL BAR ELIMINATOR///////////////////////
 // document.querySelector("div[style*='scroll hidden']").style.overflow = 'hidden'
 const sbarConfig = { attributes: true, childList: false, subtree: true, attributeFilter: ['style'], attributeOldValue: true };
@@ -1167,6 +1006,15 @@ const copyNoteButton = () => {
     }
 }
 
+// General listener for page load, both to inject after plugins and for non-SO pages
+window.addEventListener('load', (event) => {
+    console.log('The page, scripts, and all images are fully loaded, supposedly. Changing title.');
+    riskTitle();
+    console.log("Fixing white space nodes");
+    fixWhiteSpaceNodes(document.body);
+});
+
+
 const loadCheck = VM.observe(document.body, () => {
     // Find the target node
     const node = document.querySelector("#custom189_div");
@@ -1175,7 +1023,7 @@ const loadCheck = VM.observe(document.body, () => {
         changeLogResize();
         hideButtons();
         if (!isEd) {
-            displayExpGPInfo();
+            displayExpGPInfo(true);
         }
         // grabCases();
         if (!isEST) {
@@ -1187,6 +1035,7 @@ const loadCheck = VM.observe(document.body, () => {
         // autoProcess();
         const sbarObserver = new MutationObserver(lookForScrollBars);
         sbarObserver.observe(document.body, sbarConfig);
+        // displayInvoicedShipCost();
         // const links = createSearchLinks();
         // We are lazy and let the browser figure out that a space in a link is the same as %20
         // const html = `<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <title>Fraud Checking</title> </head> <body> <style> #fraudlinks { display: flex; /* flex-wrap: wrap; */ /* align-content: center; */ justify-content: center; margin-top: 20px; } #addressinfo { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; } #billtodetails { display: inline-block; border: 1px solid black; } #shiptodetails { display: inline-block; border: 1px solid black; margin-left: 12px; } .container { width: auto; min-width: 246px; margin: 0px 6px; padding: 3px 6px; border: 1px solid black; } .result.container { width: 33%; min-width: 165px; } .search { display: flex; flex-wrap: wrap; justify-content: space-between; width: auto; margin: 0px 6px; padding: 3px 6px; } .term { margin-right: 30px; } .links { display: inline-block; flex-wrap: wrap; align-content: center; } .bold { font-weight: 600; } .inline { display: inline; } h3 { margin-top: 0px; align-self: center; justify-content: center; text-align: center; } img { height: 32px; width: 32px; } a { text-decoration: none; } </style> <div id="addressinfo"> <div id="billtodetails" class="container"> <h3>Bill-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.bill.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.bill.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.bill.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.bill.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.bill.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.bill.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.bill.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.bill.country}</p> <br /> </div> <div id="shiptodetails" class="container"> <h3>Ship-to Address Details:</h3> <p class="bold inline">Customer Contact:</p> <p class="inline">${cst.ship.name}</p> <br /> <p class="bold inline">Company:</p> <p class="inline">${cst.ship.company}</p> <br /> <p class="bold inline">Street Address:</p> <p class="inline">${cst.ship.street}</p> <br /> <p class="bold inline">Suite:</p> <p class="inline">${cst.ship.suite}</p> <br /> <p class="bold inline">City:</p> <p class="inline">${cst.ship.city}</p> <br /> <p class="bold inline">State:</p> <p class="inline">${cst.ship.state}</p> <br /> <p class="bold inline">Zip:</p> <p class="inline">${cst.ship.zip}</p> <br /> <p class="bold inline">Country:</p> <p class="inline">${cst.ship.country}</p> <br /> </div> </div> <div id="fraudlinks"> <div class="result container"> <h3>Bill-to Address Searches</h3> ${links.bill.html} </div> <div class="result container"> <h3>Hybrid Searches</h3> ${links.hybrid.html} </div> <div class="result container"> <h3>Ship-to Address Searches</h3> ${links.ship.html} <!-- <div class="search"> <div class="term inline"> <p class="bold">Street/Suite + City/State/Zip:</p> <p> ${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite} ${cst.ship.city} ${cst.ship.state} ${cst.ship.zip} </p> </div> <div class="links"> <a href="https://www.truepeoplesearch.com/resultaddress?streetaddress=${cst.ship.street} ${cst.ship.suite == 'N/A' ? '' : cst.ship.suite}&citystatezip=${cst.ship.city} ${cst.ship.state} ${cst.ship.zip}" target="_blank" > <img src="https://play-lh.googleusercontent.com/aNUH0g2ASIp8tN9OnJpccMxQJDkZLPxrKWhw2OnGkDNA2WLePAOU9iWSXkSt5P3OY_0=w240-h480-rw" alt="TruePeopleSearch" title="TruePeopleSearch" /> </a> </div> </div> --> </div> </div> </body> </html>`;
@@ -1206,6 +1055,7 @@ const pcsLoadCheck = VM.observe(document.body, () => {
     const node = document.querySelector(`#item_row_1 > td:nth-child(1)`);
 
     if (node) {
+        console.log("Toolbox loaded");
         autoProcess();
 
         // disconnect observer
