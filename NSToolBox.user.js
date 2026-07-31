@@ -10,7 +10,7 @@
 // @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.56
+// @version     1.561
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -1034,6 +1034,8 @@ window.addEventListener('load', (event) => {
     markUnviewedTab();
     // Listen for the user switching to this tab
     document.addEventListener("visibilitychange", markViewedTab);
+    // Fire right away in case the user is already looking at the tab when it loads
+    markViewedTab();
     console.log("Fixing white space nodes");
     fixWhiteSpaceNodes(document.body);
 });
