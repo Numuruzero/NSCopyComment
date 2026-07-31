@@ -10,7 +10,7 @@
 // @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.55
+// @version     1.56
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -33,6 +33,8 @@ function debug(stuff) {
         console.log(stuff);
     }
 }
+
+// TODO: Add dot to order tab name if it has been observed
 
 // New simpler function to capture table data as 2D array
 // Does not care if the table is in edit mode or not, but may return empty rows if in edit mode
@@ -761,6 +763,25 @@ function hideButtons() {
     // document.querySelector("#tdbody_unhide").appendChild(unHideButton);
 }
 /////////////////////////////////////////END HIDE USED BUTTONS////////////////////////////////////////
+////////////////////////////////////////BEGIN VIEWED TAB MARKER/////////////////////////////////////////
+function markUnviewedTab() {
+    document.title = `• ${document.title}`
+}
+
+function markViewedTab() {
+    // If the user is currently looking at the tab, load the URL
+    if (document.visibilityState === "visible") {
+        // Using .replace() means this holding page won't clog up the user's "Back" button history
+        // Wait a short time before performing the redirect so the initial opening phase doesn't trigger it
+        setTimeout(() => {
+            if (document.visibilityState === "visible") {
+                if (document.title.startsWith("• ")) {
+                    document.title = document.title.replace("• ", "");
+                }
+            }
+        }, 500);
+    }
+}
 //////////////////////////////////BEGIN FIX FOR WHITE SPACE SETTING//////////////////////////////////
 const whiteSpaceList = [];
 function fixWhiteSpaceNodes(node) {
@@ -1010,6 +1031,9 @@ const copyNoteButton = () => {
 window.addEventListener('load', (event) => {
     console.log('The page, scripts, and all images are fully loaded, supposedly. Changing title.');
     riskTitle();
+    markUnviewedTab();
+    // Listen for the user switching to this tab
+    document.addEventListener("visibilitychange", markViewedTab);
     console.log("Fixing white space nodes");
     fixWhiteSpaceNodes(document.body);
 });
