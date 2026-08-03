@@ -10,7 +10,7 @@
 // @grant       GM.getValue
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @require     https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js
-// @version     1.561
+// @version     1.562
 // ==/UserScript==
 
 /*jshint esversion: 6 */
@@ -775,13 +775,24 @@ function markViewedTab() {
         // Wait a short time before performing the redirect so the initial opening phase doesn't trigger it
         setTimeout(() => {
             if (document.visibilityState === "visible") {
-                if (document.title.startsWith("• ")) {
+                if (document.title.includes("• ")) {
                     document.title = document.title.replace("• ", "");
                 }
             }
         }, 500);
     }
 }
+////////////////////////////////////////END VIEWED TAB MARKER/////////////////////////////////////////
+/////////////////////////////////////BEGIN SUCCESSFUL SAVE MARKER////////////////////////////////////
+function markSuccessfulSave() {
+    const saveSuccess = document.querySelector("#div__alert > div.uir-alert-box.confirmation.session_confirmation_alert > div.content > div.descr");
+    if (saveSuccess) {
+        if (saveSuccess.textContent.includes("Transaction successfully Saved")) {
+            document.title = `✓ ${document.title}`;
+        }
+    }
+}
+//////////////////////////////////////END SUCCESSFUL SAVE MARKER//////////////////////////////////////
 //////////////////////////////////BEGIN FIX FOR WHITE SPACE SETTING//////////////////////////////////
 const whiteSpaceList = [];
 function fixWhiteSpaceNodes(node) {
@@ -1036,6 +1047,7 @@ window.addEventListener('load', (event) => {
     document.addEventListener("visibilitychange", markViewedTab);
     // Fire right away in case the user is already looking at the tab when it loads
     markViewedTab();
+    markSuccessfulSave();
     console.log("Fixing white space nodes");
     fixWhiteSpaceNodes(document.body);
 });
